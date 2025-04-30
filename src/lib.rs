@@ -676,6 +676,19 @@ mod tests {
         }
     }
 
+        #[test]
+    fn target_order_or_results() {
+        let r = Roller::new("2d10").unwrap();
+        let res = r
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..11),
+            })
+            .unwrap();
+        let s = format!("{}", res.as_single().unwrap().to_string(false));
+        assert_eq!(s, "[1, 2] = 3")
+        
+    }
+
     #[test]
     fn target_enum() {
         let r = Roller::new("6d6 t[2,4,6]").unwrap();

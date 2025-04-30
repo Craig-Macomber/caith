@@ -66,9 +66,8 @@ impl SingleRollResult {
     }
 
     /// Add a step in the history
-    pub(crate) fn add_history(&mut self, mut history: Vec<DiceResult>, is_fudge: bool) {
+    pub(crate) fn add_history(&mut self, history: Vec<DiceResult>, is_fudge: bool) {
         self.dirty = true;
-        history.sort_unstable_by(|a, b| b.cmp(a));
         self.history.push(if is_fudge {
             RollHistory::Fudge(history.iter().map(|r| r.res).collect())
         } else {
@@ -76,9 +75,8 @@ impl SingleRollResult {
         });
     }
 
-    pub(crate) fn add_rerolled_history(&mut self, mut history: Vec<Vec<DiceResult>>) {
+    pub(crate) fn add_rerolled_history(&mut self, history: Vec<Vec<DiceResult>>) {
         self.dirty = true;
-        history.sort_unstable_by(|a, b| b.cmp(a));
         self.history.push(RollHistory::ReRolls(history));
     }
 
@@ -91,7 +89,7 @@ impl SingleRollResult {
     pub(crate) fn compute_total(&mut self, modifier: TotalModifier) -> Result<i64> {
         if self.dirty {
             self.dirty = false;
-            let mut flat = self.history.iter().fold(Vec::new(), |mut acc, h| {
+            let flat = self.history.iter().fold(Vec::new(), |mut acc, h| {
                 match h {
                     RollHistory::Roll(r) => {
                         let mut c = r.iter().map(|u| u.res as i64).collect();
@@ -106,7 +104,6 @@ impl SingleRollResult {
                 };
                 acc
             });
-            flat.sort_unstable();
             let flat = flat;
             match modifier {
                 TotalModifier::KeepHi(n)
