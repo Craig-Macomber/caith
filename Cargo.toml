@@ -22,10 +22,10 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 pest = "2.4.1"
 pest_derive = "2.4.1"
-rand = "0.8.5"
+rand = "0.9.1"
 
 [dev-dependencies]
-rand_core = "0.6.4"
+rand_core = "0.9.3"
 
 [features]
 default = []
