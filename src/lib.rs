@@ -677,7 +677,7 @@ mod tests {
     }
 
     #[test]
-    fn target_order_or_results() {
+    fn target_order_of_results() {
         let r = Roller::new("2d10").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
@@ -686,6 +686,46 @@ mod tests {
             .unwrap();
         let s = format!("{}", res.as_single().unwrap().to_string(false));
         assert_eq!(s, "[1, 2] = 3")
+    }
+
+    #[test]
+    fn keep_highest() {
+        let r = Roller::new("2d10K1").unwrap();
+        let res = r
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..11),
+            })
+            .unwrap();
+        let s = format!("{}", res.as_single().unwrap().to_string(false));
+        assert_eq!(s, "[1, 2] = 2");
+
+        let res = r
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..11).rev(),
+            })
+            .unwrap();
+        let s = format!("{}", res.as_single().unwrap().to_string(false));
+        assert_eq!(s, "[10, 9] = 10");
+    }
+
+    #[test]
+    fn keep_lowest() {
+        let r = Roller::new("2d10k1").unwrap();
+        let res = r
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..11),
+            })
+            .unwrap();
+        let s = format!("{}", res.as_single().unwrap().to_string(false));
+        assert_eq!(s, "[1, 2] = 1");
+
+        let res = r
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..11).rev(),
+            })
+            .unwrap();
+        let s = format!("{}", res.as_single().unwrap().to_string(false));
+        assert_eq!(s, "[10, 9] = 9");
     }
 
     #[test]
