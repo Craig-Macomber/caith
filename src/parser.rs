@@ -205,7 +205,7 @@ fn compute_option<RNG: DiceRollSource>(
     rng: &mut RNG,
     prev_modifier: &TotalModifier,
 ) -> Result<OptionResult> {
-    let (modifier, mut res) = match &option.as_rule() {
+    let (modifier, res) = match &option.as_rule() {
         Rule::explode => compute_explode(rolls, sides, res, option, prev_modifier, rng),
         Rule::i_explode => compute_i_explode(rolls, sides, res, option, prev_modifier, rng),
         Rule::reroll => compute_reroll(rolls, sides, res, option, rng),
@@ -290,18 +290,45 @@ fn compute_option<RNG: DiceRollSource>(
         | TotalModifier::TargetEnum(_)
         | TotalModifier::Fudge => 0,
     };
-    res.sort_unstable();
     let res = match modifier {
-        TotalModifier::KeepHi(_) => res[res.len() - n..].to_vec(),
-        TotalModifier::KeepLo(_) => res[..n].to_vec(),
-        TotalModifier::DropHi(_) => res[..res.len() - n].to_vec(),
-        TotalModifier::DropLo(_) => res[n..].to_vec(),
+        TotalModifier::KeepHi(_) => keep_low(&res, n, |result| u64::MAX - result.res),
+        TotalModifier::KeepLo(_) => keep_low(&res, n, |result| result.res),
+        TotalModifier::DropHi(_) => keep_low(&res, res.len() - n, |result| result.res),
+        TotalModifier::DropLo(_) => keep_low(&res, res.len() - n, |result| u64::MAX - result.res),
         TotalModifier::None(_)
         | TotalModifier::TargetFailureDouble(_, _, _)
         | TotalModifier::TargetEnum(_)
         | TotalModifier::Fudge => res,
     };
     Ok(OptionResult { res, modifier })
+}
+
+/// Copy `v`, but with the top (as defined by `f`) `to_drop` entries omitted.
+fn keep_low<T: Clone, Key: Ord + Copy>(v: &[T], to_keep: usize, f: impl Fn(&T) -> Key) -> Vec<T> {
+    // [(sort_value, original_index)]
+    let mut keys: Vec<(Key, usize)> = v.iter().enumerate().map(|(i, t)| (f(t), i)).collect();
+    keys.sort_by_key(|(sort_value, _original_index)| *sort_value);
+    keys.truncate(to_keep);
+    let mut keep: Vec<usize> = keys
+        .into_iter()
+        .map(|(_sort_value, original_index)| original_index)
+        .collect();
+    keep.sort();
+    keep.iter().map(|index| v[*index].clone()).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::keep_low;
+
+    #[test]
+    fn drop_high_test() {
+        assert_eq!(keep_low(&[1, 3, 2], 2, |x| *x), vec![1, 2]);
+        assert_eq!(keep_low(&[1, 3, 2], 2, |x| -*x), vec![3, 2]);
+        assert_eq!(keep_low(&[4, 1, 3, 2], 2, |x| *x), vec![1, 2]);
+        assert_eq!(keep_low(&[4, 1, 3, 2], 1, |x| *x), vec![1]);
+        assert_eq!(keep_low(&[4], 1, |x| *x), vec![4]);
+    }
 }
 
 fn compute_roll<RNG: DiceRollSource>(
