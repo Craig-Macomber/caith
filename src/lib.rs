@@ -183,7 +183,7 @@ where
     T: Rng,
 {
     fn roll_single_die(&mut self, sides: u64) -> u64 {
-        self.rng.gen_range(1..1 + sides)
+        self.rng.random_range(1..1 + sides)
     }
 }
 
@@ -201,7 +201,7 @@ impl Roller {
 
     /// Evaluate and roll the dices with default Rng source (`rand::thread_rng()`)
     pub fn roll(&self) -> Result<RollResult> {
-        self.roll_with(&mut rand::thread_rng())
+        self.roll_with(&mut rand::rng())
     }
 
     /// Evaluate and roll the dices with provided rng source
@@ -286,7 +286,7 @@ impl Roller {
     /// let r = Roller::new("1d6 + 1d4 + 1d10 + 1d20").unwrap();
     /// assert_eq!(vec!["1d6", "1d4", "1d10", "1d20"], r.dices().expect("Error on parse").collect::<Vec<_>>());
     /// ```
-    pub fn dices(&self) -> Result<Dices> {
+    pub fn dices(&self) -> Result<Dices<'_>> {
         let pairs = RollParser::parse(Rule::command, &self.0)?
             .next()
             .unwrap()
