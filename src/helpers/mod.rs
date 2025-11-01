@@ -1,6 +1,6 @@
 //! This module gather some helpers that helps interpret the roll result for certain RPG rules
 //! This module can be empty if no helpers are activate by a feature flag
-//! 
+//!
 //!
 
 #[cfg(feature = "ova")]

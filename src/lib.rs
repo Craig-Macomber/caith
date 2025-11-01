@@ -676,7 +676,7 @@ mod tests {
         }
     }
 
-        #[test]
+    #[test]
     fn target_order_or_results() {
         let r = Roller::new("2d10").unwrap();
         let res = r
@@ -686,7 +686,6 @@ mod tests {
             .unwrap();
         let s = format!("{}", res.as_single().unwrap().to_string(false));
         assert_eq!(s, "[1, 2] = 3")
-        
     }
 
     #[test]
