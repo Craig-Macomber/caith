@@ -270,41 +270,41 @@ fn compute_option<RNG: DiceRollSource>(
         _ => unreachable!("{:#?}", option),
     };
 
-    let n = match modifier {
-        TotalModifier::KeepHi(n) | TotalModifier::KeepLo(n) => {
-            if n > res.len() {
-                res.len()
-            } else {
-                n
-            }
-        }
-        TotalModifier::DropHi(n) | TotalModifier::DropLo(n) => {
-            if n > res.len() {
-                0
-            } else {
-                n
-            }
-        }
-        TotalModifier::None(_)
-        | TotalModifier::TargetFailureDouble(_, _, _)
-        | TotalModifier::TargetEnum(_)
-        | TotalModifier::Fudge => 0,
-    };
-    let res = match modifier {
-        TotalModifier::KeepHi(_) => keep_low(&res, n, |result| u64::MAX - result.res),
-        TotalModifier::KeepLo(_) => keep_low(&res, n, |result| result.res),
-        TotalModifier::DropHi(_) => keep_low(&res, res.len() - n, |result| result.res),
-        TotalModifier::DropLo(_) => keep_low(&res, res.len() - n, |result| u64::MAX - result.res),
-        TotalModifier::None(_)
-        | TotalModifier::TargetFailureDouble(_, _, _)
-        | TotalModifier::TargetEnum(_)
-        | TotalModifier::Fudge => res,
-    };
+    // TODO: why is this logic duplicated here and in compute_total
+    let res = apply_total_modifier(&modifier, &res, |r| r.res)?;
     Ok(OptionResult { res, modifier })
 }
 
+pub(crate) fn apply_total_modifier<T: Clone>(
+    modifier: &TotalModifier,
+    v: &[T],
+    get_number: impl Fn(&T) -> u64,
+) -> Result<Vec<T>> {
+    let res = match modifier {
+        TotalModifier::KeepHi(n) => keep_low(&v, *n, |result| u64::MAX - get_number(&result))?,
+        TotalModifier::KeepLo(n) => keep_low(&v, *n, |result| get_number(&result))?,
+        TotalModifier::DropHi(n) => keep_low(&v, v.len() - n, |result| get_number(&result))?,
+        TotalModifier::DropLo(n) => {
+            keep_low(&v, v.len() - n, |result| u64::MAX - get_number(&result))?
+        }
+        TotalModifier::None(_)
+        | TotalModifier::TargetFailureDouble(_, _, _)
+        | TotalModifier::TargetEnum(_)
+        | TotalModifier::Fudge => v.iter().cloned().collect(),
+    };
+    Ok(res)
+}
+
 /// Copy `v`, but with the top (as defined by `f`) `to_drop` entries omitted.
-fn keep_low<T: Clone, Key: Ord + Copy>(v: &[T], to_keep: usize, f: impl Fn(&T) -> Key) -> Vec<T> {
+fn keep_low<T: Clone, Key: Ord + Copy>(
+    v: &[T],
+    to_keep: usize,
+    f: impl Fn(&T) -> Key,
+) -> Result<Vec<T>> {
+    if to_keep > v.len() {
+        return Err("Not enough dice to keep or drop".into());
+    }
+
     // [(sort_value, original_index)]
     let mut keys: Vec<(Key, usize)> = v.iter().enumerate().map(|(i, t)| (f(t), i)).collect();
     keys.sort_by_key(|(sort_value, _original_index)| *sort_value);
@@ -314,7 +314,7 @@ fn keep_low<T: Clone, Key: Ord + Copy>(v: &[T], to_keep: usize, f: impl Fn(&T) -
         .map(|(_sort_value, original_index)| original_index)
         .collect();
     keep.sort();
-    keep.iter().map(|index| v[*index].clone()).collect()
+    Ok(keep.iter().map(|index| v[*index].clone()).collect())
 }
 
 #[cfg(test)]
@@ -323,11 +323,11 @@ mod tests {
 
     #[test]
     fn drop_high_test() {
-        assert_eq!(keep_low(&[1, 3, 2], 2, |x| *x), vec![1, 2]);
-        assert_eq!(keep_low(&[1, 3, 2], 2, |x| -*x), vec![3, 2]);
-        assert_eq!(keep_low(&[4, 1, 3, 2], 2, |x| *x), vec![1, 2]);
-        assert_eq!(keep_low(&[4, 1, 3, 2], 1, |x| *x), vec![1]);
-        assert_eq!(keep_low(&[4], 1, |x| *x), vec![4]);
+        assert_eq!(keep_low(&[1, 3, 2], 2, |x| *x).unwrap(), vec![1, 2]);
+        assert_eq!(keep_low(&[1, 3, 2], 2, |x| -*x).unwrap(), vec![3, 2]);
+        assert_eq!(keep_low(&[4, 1, 3, 2], 2, |x| *x).unwrap(), vec![1, 2]);
+        assert_eq!(keep_low(&[4, 1, 3, 2], 1, |x| *x).unwrap(), vec![1]);
+        assert_eq!(keep_low(&[4], 1, |x| *x).unwrap(), vec![4]);
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::{
-    error::Result, parser::TotalModifier, rollresult::DiceResult, rollresult::RollHistory,
-    rollresult::Value,
+    error::Result,
+    parser::{apply_total_modifier, TotalModifier},
+    rollresult::{DiceResult, RollHistory, Value},
 };
 
 /// Carry the result of one roll and an history of the steps taken.
@@ -120,16 +121,8 @@ impl SingleRollResult {
                 | TotalModifier::Fudge => (),
             }
 
-            let slice = match modifier {
-                TotalModifier::KeepHi(n) => &flat[flat.len() - n..],
-                TotalModifier::KeepLo(n) => &flat[..n],
-                TotalModifier::DropHi(n) => &flat[..flat.len() - n],
-                TotalModifier::DropLo(n) => &flat[n..],
-                TotalModifier::None(_)
-                | TotalModifier::TargetFailureDouble(_, _, _)
-                | TotalModifier::TargetEnum(_)
-                | TotalModifier::Fudge => flat.as_slice(),
-            };
+            // TODO: why is this logic duplicated here and in compute_option
+            let slice = apply_total_modifier(&modifier, &flat, |n| (*n).try_into().unwrap())?;
 
             self.total = match modifier {
                 TotalModifier::TargetFailureDouble(t, f, d) => slice.iter().fold(0, |acc, &x| {

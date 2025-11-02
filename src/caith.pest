@@ -37,5 +37,6 @@ integer = { ("+" | "-")? ~ number }
 reason = { ":" ~ ANY* }
 sort = { "#" }
 command = _{ SOI ~ (repeated_expr | expr) ~ reason? ~ EOI }
+single_command = _{ SOI ~ expr ~ EOI }
 
 WHITESPACE = _{ " " | " " }

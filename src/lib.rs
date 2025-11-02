@@ -307,6 +307,60 @@ impl Roller {
     }
 }
 
+/// An object holding the query.
+///
+/// Like [Roller] but only supports [SingleRollResult], and validates on creation.
+///
+#[derive(Clone, Debug)]
+pub struct SingleRoller(String);
+
+impl SingleRoller {
+    /// Store the input
+    pub fn new(input: &str) -> Result<Self> {
+        let r = SingleRoller(input.to_owned());
+        match r.try_roll_with_source(&mut RngDiceRollSource {
+            rng: &mut rand::rng(),
+        }) {
+            Ok(_) => Ok(r),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Evaluate and roll the dices with default Rng source (`rand::rng()`)
+    pub fn roll(&self) -> SingleRollResult {
+        self.roll_with(&mut rand::rng())
+    }
+
+    /// Evaluate and roll the dices with provided rng source
+    pub fn roll_with<RNG: Rng>(&self, rng: &mut RNG) -> SingleRollResult {
+        self.roll_with_source(&mut RngDiceRollSource { rng })
+    }
+
+    /// Evaluate and roll the dice with provided dice roll source
+    pub fn roll_with_source<RNG: DiceRollSource>(&self, rng: &mut RNG) -> SingleRollResult {
+        self.try_roll_with_source(rng).unwrap()
+    }
+
+    /// Evaluate and roll the dice with provided dice roll source
+    fn try_roll_with_source<RNG: DiceRollSource>(&self, rng: &mut RNG) -> Result<SingleRollResult> {
+        // Extract root expression (expr)
+        let expr = {
+            let mut pairs = RollParser::parse(Rule::single_command, &self.0)?;
+            let expr_type = pairs.next().unwrap();
+            assert_eq!(expr_type.as_rule(), Rule::expr);
+            expr_type.into_inner()
+        };
+
+        let roll_res = parser::compute(expr, rng, false)?;
+        Ok(roll_res)
+    }
+
+    /// Give back the query string
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Iterator that lazily returns each dice of the expression.
 ///
 /// See [`Roller::dices()`] for example
@@ -725,6 +779,42 @@ mod tests {
             })
             .unwrap();
         let s = format!("{}", res.as_single().unwrap().to_string(false));
+        assert_eq!(s, "[10, 9] = 9");
+    }
+
+    #[test]
+    fn keep_highest_single_1() {
+        let r = SingleRoller::new("2d10K1").unwrap();
+        let res = r.roll_with_source(&mut IteratorDiceRollSource {
+            iterator: &mut (1..11),
+        });
+        let s = format!("{}", res.to_string(false));
+        assert_eq!(s, "[1, 2] = 2");
+    }
+
+    #[test]
+    fn keep_highest_single_2() {
+        let r = SingleRoller::new("2d10K1").unwrap();
+        let res = r.roll_with_source(&mut IteratorDiceRollSource {
+            iterator: &mut (1..11).rev(),
+        });
+        let s = format!("{}", res.to_string(false));
+        assert_eq!(s, "[10, 9] = 10");
+    }
+
+    #[test]
+    fn keep_lowest_single() {
+        let r: SingleRoller = SingleRoller::new("2d10k1").unwrap();
+        let res = r.roll_with_source(&mut IteratorDiceRollSource {
+            iterator: &mut (1..11),
+        });
+        let s = format!("{}", res.to_string(false));
+        assert_eq!(s, "[1, 2] = 1");
+
+        let res = r.roll_with_source(&mut IteratorDiceRollSource {
+            iterator: &mut (1..11).rev(),
+        });
+        let s = format!("{}", res.to_string(false));
         assert_eq!(s, "[10, 9] = 9");
     }
 
