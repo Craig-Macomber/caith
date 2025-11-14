@@ -81,6 +81,11 @@ impl SingleRollResult {
         self.history.push(RollHistory::ReRolls(history));
     }
 
+    pub(crate) fn add_discard_history(&mut self, history: Vec<(bool, DiceResult)>) {
+        self.dirty = true;
+        self.history.push(RollHistory::Discards(history));
+    }
+
     pub(crate) fn add_parenthesis(&mut self) {
         self.history.insert(0, RollHistory::OpenParenthesis);
         self.history.push(RollHistory::CloseParenthesis);
@@ -123,6 +128,7 @@ impl SingleRollResult {
 
             // TODO: why is this logic duplicated here and in compute_option
             let slice = apply_total_modifier(&modifier, &flat, |n| (*n).try_into().unwrap())?;
+            let slice: Vec<i64> = slice.iter().filter(|(f, _)| *f).map(|(_, s)| *s).collect();
 
             self.total = match modifier {
                 TotalModifier::TargetFailureDouble(t, f, d) => slice.iter().fold(0, |acc, &x| {

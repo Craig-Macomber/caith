@@ -39,10 +39,13 @@ impl Display for Value {
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum RollHistory {
+    /// Rolls which include discarded rolls.
+    /// Should be followed by a Roll with the final results.
+    Discards(Vec<(bool, DiceResult)>),
     /// Rolls which include rerolls.
     /// Should be followed by a Roll with the final results.
     ReRolls(Vec<Vec<DiceResult>>),
-    /// A roll with normal dices
+    /// A roll with normal dices, kept for inclusion in the final result
     Roll(Vec<DiceResult>),
     /// A roll with Fudge dices
     Fudge(Vec<u64>),
@@ -67,6 +70,20 @@ impl Display for RollHistory {
                             .map(|r| r.res.to_string())
                             .collect::<Vec<_>>()
                             .join(" -> ")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("[{}] -> ", s2)
+            }
+            RollHistory::Discards(v) => {
+                let s2 = v
+                    .iter()
+                    .map(|(kept, r)| {
+                        if *kept {
+                            r.res.to_string()
+                        } else {
+                            format!("[{}]", r.res.to_string())
+                        }
                     })
                     .collect::<Vec<_>>()
                     .join(", ");

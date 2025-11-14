@@ -6,7 +6,7 @@ use pest::{
 };
 use pest_derive::Parser;
 
-use crate::{error::Result, DiceResult, SingleRollResult};
+use crate::{error::Result, DiceResult, RollError, SingleRollResult};
 
 pub trait DiceRollSource {
     fn roll_single_die(&mut self, sides: u64) -> u64;
@@ -27,7 +27,12 @@ pub(crate) enum TotalModifier {
     KeepLo(usize),
     DropHi(usize),
     DropLo(usize),
+    /// These values are in order:
+    /// (target (threshold for success),
+    /// failure (threshold for negative success),
+    /// target doubled (threshold for two successes per dice))
     TargetFailureDouble(u64, u64, u64),
+    // List of specific values which count as success
     TargetEnum(Vec<u64>),
     Fudge,
     None(Rule),
@@ -93,7 +98,7 @@ fn compute_explode<RNG: DiceRollSource>(
     option: Pair<Rule>,
     prev_modifier: &TotalModifier,
     rng: &mut RNG,
-) -> (TotalModifier, Vec<DiceResult>) {
+) -> OptionResult {
     let value = extract_option_value(option).unwrap_or(sides);
     let nb = res.iter().filter(|x| x.res >= value).count() as u64;
     if prev_modifier != &TotalModifier::None(Rule::explode)
@@ -108,7 +113,10 @@ fn compute_explode<RNG: DiceRollSource>(
     } else {
         res
     };
-    (TotalModifier::None(Rule::explode), res)
+    OptionResult {
+        modifier: TotalModifier::None(Rule::explode),
+        res,
+    }
 }
 
 fn compute_i_explode<RNG: DiceRollSource>(
@@ -118,7 +126,7 @@ fn compute_i_explode<RNG: DiceRollSource>(
     option: Pair<Rule>,
     prev_modifier: &TotalModifier,
     rng: &mut RNG,
-) -> (TotalModifier, Vec<DiceResult>) {
+) -> OptionResult {
     let value = extract_option_value(option).unwrap_or(sides);
     if prev_modifier != &TotalModifier::None(Rule::explode)
         && prev_modifier != &TotalModifier::None(Rule::i_explode)
@@ -132,7 +140,10 @@ fn compute_i_explode<RNG: DiceRollSource>(
         nb = res.iter().filter(|x| x.res >= value).count() as u64;
         rolls.add_history(res.clone(), false);
     }
-    (TotalModifier::None(Rule::i_explode), res)
+    OptionResult {
+        modifier: TotalModifier::None(Rule::i_explode),
+        res,
+    }
 }
 
 fn compute_reroll<RNG: DiceRollSource>(
@@ -141,8 +152,23 @@ fn compute_reroll<RNG: DiceRollSource>(
     res: Vec<DiceResult>,
     option: Pair<Rule>,
     rng: &mut RNG,
-) -> (TotalModifier, Vec<DiceResult>) {
+) -> OptionResult {
     let value = extract_option_value(option).unwrap();
+    let reroll = compute_reroll_inner(rolls, sides, &res, value, rng);
+
+    OptionResult {
+        modifier: TotalModifier::None(Rule::reroll),
+        res: reroll.unwrap_or(res),
+    }
+}
+
+fn compute_reroll_inner<RNG: DiceRollSource>(
+    rolls: &mut SingleRollResult,
+    sides: u64,
+    res: &Vec<DiceResult>,
+    value: u64,
+    rng: &mut RNG,
+) -> Option<Vec<DiceResult>> {
     let mut has_rerolled = false;
     let mut rerolls: Vec<Vec<DiceResult>> = vec![];
     let res_new: Vec<DiceResult> = res
@@ -164,122 +190,138 @@ fn compute_reroll<RNG: DiceRollSource>(
 
     if has_rerolled {
         rolls.add_rerolled_history(rerolls);
+        return Some(res_new);
     }
-    rolls.add_history(res_new.clone(), false);
-
-    (TotalModifier::None(Rule::reroll), res_new)
+    None
 }
 
 fn compute_i_reroll<RNG: DiceRollSource>(
     rolls: &mut SingleRollResult,
     sides: u64,
-    res: Vec<DiceResult>,
+    mut res: Vec<DiceResult>,
     option: Pair<Rule>,
     rng: &mut RNG,
-) -> (TotalModifier, Vec<DiceResult>) {
+) -> Result<OptionResult> {
     let value = extract_option_value(option).unwrap();
-    let mut has_rerolled = false;
-    let res: Vec<DiceResult> = res
-        .into_iter()
-        .map(|x| {
-            let mut x = x;
-            while x.res <= value {
-                has_rerolled = true;
-                x = roll_dice(1, sides, rng)[0]
-            }
-            x
-        })
-        .collect();
-
-    if has_rerolled {
-        rolls.add_history(res.clone(), false);
+    if value >= sides {
+        return Err(RollError::ParamError(
+            format!("Cannot infinitely reroll dice of {value} or lower then the maximum roll is {sides}: this would go on forever")
+        ));
     }
-    (TotalModifier::None(Rule::i_reroll), res)
+    loop {
+        let reroll = compute_reroll_inner(rolls, sides, &res, value, rng);
+        match reroll {
+            Some(r) => res = r,
+            None => {
+                return Ok(OptionResult {
+                    modifier: TotalModifier::None(Rule::i_reroll),
+                    res,
+                })
+            }
+        }
+    }
 }
 
 fn compute_option<RNG: DiceRollSource>(
-    rolls: &mut SingleRollResult,
+    mut rolls: &mut SingleRollResult,
     sides: u64,
     res: Vec<DiceResult>,
     option: Pair<Rule>,
     rng: &mut RNG,
     prev_modifier: &TotalModifier,
 ) -> Result<OptionResult> {
-    let (modifier, res) = match &option.as_rule() {
-        Rule::explode => compute_explode(rolls, sides, res, option, prev_modifier, rng),
-        Rule::i_explode => compute_i_explode(rolls, sides, res, option, prev_modifier, rng),
-        Rule::reroll => compute_reroll(rolls, sides, res, option, rng),
+    fn keep_or_drop(
+        rolls: &mut SingleRollResult,
+        res: &Vec<DiceResult>,
+        modifier: TotalModifier,
+    ) -> Result<OptionResult> {
+        // TODO: why is this logic duplicated here and in compute_total
+        let flagged = apply_total_modifier(&modifier, &res, |r| r.res)?;
+        let out: Vec<DiceResult> = flagged
+            .iter()
+            .filter(|(f, _)| *f)
+            .map(|(_, r)| r.clone())
+            .collect();
+        if res.len() != out.len() {
+            rolls.add_discard_history(flagged);
+        }
+        Ok(OptionResult { res: out, modifier })
+    }
+
+    match &option.as_rule() {
+        Rule::explode => Ok(compute_explode(
+            rolls,
+            sides,
+            res,
+            option,
+            prev_modifier,
+            rng,
+        )),
+        Rule::i_explode => Ok(compute_i_explode(
+            rolls,
+            sides,
+            res,
+            option,
+            prev_modifier,
+            rng,
+        )),
+        Rule::reroll => Ok(compute_reroll(rolls, sides, res, option, rng)),
         Rule::i_reroll => compute_i_reroll(rolls, sides, res, option, rng),
         Rule::keep_hi => {
             let value = extract_option_value(option).unwrap();
-            if rolls.get_history().is_empty() {
-                rolls.add_history(res.clone(), false);
-            }
-            (TotalModifier::KeepHi(value as usize), res)
+            keep_or_drop(&mut rolls, &res, TotalModifier::KeepHi(value as usize))
         }
         Rule::keep_lo => {
             let value = extract_option_value(option).unwrap();
-            if rolls.get_history().is_empty() {
-                rolls.add_history(res.clone(), false);
-            }
-            (TotalModifier::KeepLo(value as usize), res)
+            keep_or_drop(&mut rolls, &res, TotalModifier::KeepLo(value as usize))
         }
         Rule::drop_hi => {
             let value = extract_option_value(option).unwrap();
-            if rolls.get_history().is_empty() {
-                rolls.add_history(res.clone(), false);
-            }
-            (TotalModifier::DropHi(value as usize), res)
+            keep_or_drop(&mut rolls, &res, TotalModifier::DropHi(value as usize))
         }
         Rule::drop_lo => {
             let value = extract_option_value(option).unwrap();
-            if rolls.get_history().is_empty() {
-                rolls.add_history(res.clone(), false);
-            }
-            (TotalModifier::DropLo(value as usize), res)
+            keep_or_drop(&mut rolls, &res, TotalModifier::DropLo(value as usize))
         }
         Rule::target => {
             let value_or_enum = option.into_inner().next().unwrap();
-            match value_or_enum.as_rule() {
-                Rule::number => (
-                    TotalModifier::TargetFailureDouble(
-                        value_or_enum.as_str().parse::<u64>().unwrap(),
-                        0,
-                        0,
-                    ),
-                    res,
+            let modifier = match value_or_enum.as_rule() {
+                Rule::number => TotalModifier::TargetFailureDouble(
+                    value_or_enum.as_str().parse::<u64>().unwrap(),
+                    0,
+                    0,
                 ),
+
                 Rule::target_enum => {
                     let numbers_list = value_or_enum.into_inner();
                     let numbers_list: Vec<_> = numbers_list
                         .map(|p| p.as_str().parse::<u64>().unwrap())
                         .collect();
-                    (TotalModifier::TargetEnum(numbers_list), res)
+                    TotalModifier::TargetEnum(numbers_list)
                 }
                 _ => unreachable!(),
-            }
+            };
+            Ok(OptionResult { res, modifier })
         }
         Rule::double_target => {
             let value = extract_option_value(option).unwrap();
-            (TotalModifier::TargetFailureDouble(0, 0, value), res)
+            let modifier = TotalModifier::TargetFailureDouble(0, 0, value);
+            Ok(OptionResult { res, modifier })
         }
         Rule::failure => {
             let value = extract_option_value(option).unwrap();
-            (TotalModifier::TargetFailureDouble(0, value, 0), res)
+            let modifier = TotalModifier::TargetFailureDouble(0, value, 0);
+            Ok(OptionResult { res, modifier })
         }
         _ => unreachable!("{:#?}", option),
-    };
-
-    // TODO: why is this logic duplicated here and in compute_total
-    let res = apply_total_modifier(&modifier, &res, |r| r.res)?;
-    Ok(OptionResult { res, modifier })
+    }
 }
 
 pub(crate) fn apply_total_modifier<T: Clone>(
     modifier: &TotalModifier,
     v: &[T],
     get_number: impl Fn(&T) -> u64,
-) -> Result<Vec<T>> {
+) -> Result<Vec<(bool, T)>> {
     let res = match modifier {
         TotalModifier::KeepHi(n) => keep_low(&v, *n, |result| u64::MAX - get_number(&result))?,
         TotalModifier::KeepLo(n) => keep_low(&v, *n, |result| get_number(&result))?,
@@ -290,17 +332,17 @@ pub(crate) fn apply_total_modifier<T: Clone>(
         TotalModifier::None(_)
         | TotalModifier::TargetFailureDouble(_, _, _)
         | TotalModifier::TargetEnum(_)
-        | TotalModifier::Fudge => v.iter().cloned().collect(),
+        | TotalModifier::Fudge => v.iter().map(|f| (true, f.clone())).collect(),
     };
     Ok(res)
 }
 
-/// Copy `v`, but with the top (as defined by `f`) `to_drop` entries omitted.
+/// Copy `v`, but with the top (as defined by `f`) `to_drop` entries flagged with false and the rest with true.
 fn keep_low<T: Clone, Key: Ord + Copy>(
     v: &[T],
     to_keep: usize,
     f: impl Fn(&T) -> Key,
-) -> Result<Vec<T>> {
+) -> Result<Vec<(bool, T)>> {
     if to_keep > v.len() {
         return Err("Not enough dice to keep or drop".into());
     }
@@ -308,13 +350,17 @@ fn keep_low<T: Clone, Key: Ord + Copy>(
     // [(sort_value, original_index)]
     let mut keys: Vec<(Key, usize)> = v.iter().enumerate().map(|(i, t)| (f(t), i)).collect();
     keys.sort_by_key(|(sort_value, _original_index)| *sort_value);
-    keys.truncate(to_keep);
-    let mut keep: Vec<usize> = keys
-        .into_iter()
-        .map(|(_sort_value, original_index)| original_index)
+    let mut flagged_indexes: Vec<(bool, usize)> = keys
+        .iter()
+        .enumerate()
+        .map(|(i, (_, index))| (i < to_keep, *index))
         .collect();
-    keep.sort();
-    Ok(keep.iter().map(|index| v[*index].clone()).collect())
+    flagged_indexes.sort_by_key(|(keep, key)| *key);
+
+    Ok(flagged_indexes
+        .iter()
+        .map(|(flag, index)| (*flag, v[*index].clone()))
+        .collect())
 }
 
 #[cfg(test)]
@@ -322,12 +368,24 @@ mod tests {
     use crate::parser::keep_low;
 
     #[test]
-    fn drop_high_test() {
-        assert_eq!(keep_low(&[1, 3, 2], 2, |x| *x).unwrap(), vec![1, 2]);
-        assert_eq!(keep_low(&[1, 3, 2], 2, |x| -*x).unwrap(), vec![3, 2]);
-        assert_eq!(keep_low(&[4, 1, 3, 2], 2, |x| *x).unwrap(), vec![1, 2]);
-        assert_eq!(keep_low(&[4, 1, 3, 2], 1, |x| *x).unwrap(), vec![1]);
-        assert_eq!(keep_low(&[4], 1, |x| *x).unwrap(), vec![4]);
+    fn keep_low_test() {
+        assert_eq!(
+            keep_low(&[1, 3, 2], 2, |x| *x).unwrap(),
+            vec![(true, 1), (false, 3), (true, 2)]
+        );
+        assert_eq!(
+            keep_low(&[1, 3, 2], 2, |x| -*x).unwrap(),
+            vec![(false, 1), (true, 3), (true, 2)]
+        );
+        assert_eq!(
+            keep_low(&[4, 1, 3, 2], 2, |x| *x).unwrap(),
+            vec![(false, 4), (true, 1), (false, 3), (true, 2)]
+        );
+        assert_eq!(
+            keep_low(&[4, 1, 3, 2], 1, |x| *x).unwrap(),
+            vec![(false, 4), (true, 1), (false, 3), (false, 2)]
+        );
+        assert_eq!(keep_low(&[4], 1, |x| *x).unwrap(), vec![(true, 4)]);
     }
 }
 
@@ -371,47 +429,33 @@ fn compute_roll<RNG: DiceRollSource>(
     let mut modifier = TotalModifier::None(Rule::expr);
     let mut next_option = dice.next();
     if !is_fudge {
-        if next_option.is_some() {
-            while next_option.is_some() {
-                let option = next_option.unwrap();
-                let opt_res = compute_option(&mut rolls, sides, res, option, rng, &modifier)?;
-                res = opt_res.res;
-                modifier = match opt_res.modifier {
-                    TotalModifier::TargetFailureDouble(t, f, d) => match modifier {
-                        TotalModifier::TargetFailureDouble(ot, of, od) => {
-                            if t > 0 {
-                                TotalModifier::TargetFailureDouble(t, of, od)
-                            } else if f > 0 {
-                                TotalModifier::TargetFailureDouble(ot, f, od)
-                            } else {
-                                TotalModifier::TargetFailureDouble(ot, of, d)
-                            }
+        while next_option.is_some() {
+            let option = next_option.unwrap();
+            let opt_res = compute_option(&mut rolls, sides, res, option, rng, &modifier)?;
+            res = opt_res.res;
+            modifier = match opt_res.modifier {
+                TotalModifier::TargetFailureDouble(t, f, d) => match modifier {
+                    TotalModifier::TargetFailureDouble(ot, of, od) => {
+                        if t > 0 {
+                            TotalModifier::TargetFailureDouble(t, of, od)
+                        } else if f > 0 {
+                            TotalModifier::TargetFailureDouble(ot, f, od)
+                        } else {
+                            TotalModifier::TargetFailureDouble(ot, of, d)
                         }
-                        _ => {
-                            rolls.add_history(res.clone(), is_fudge);
-                            opt_res.modifier
-                        }
-                    },
-                    TotalModifier::TargetEnum(_) => {
-                        rolls.add_history(res.clone(), is_fudge);
-                        opt_res.modifier
                     }
                     _ => opt_res.modifier,
-                };
-                next_option = dice.next();
-            }
-        } else {
-            rolls.add_history(res, is_fudge);
+                },
+                TotalModifier::TargetEnum(_) => opt_res.modifier,
+                _ => opt_res.modifier,
+            };
+            next_option = dice.next();
         }
-        rolls.compute_total(modifier)?;
     } else {
-        rolls.add_history(res, is_fudge);
-        rolls.compute_total(if is_fudge {
-            TotalModifier::Fudge
-        } else {
-            TotalModifier::None(Rule::expr)
-        })?;
+        modifier = TotalModifier::Fudge;
     }
+    rolls.add_history(res, is_fudge);
+    rolls.compute_total(modifier)?;
 
     Ok(rolls)
 }
