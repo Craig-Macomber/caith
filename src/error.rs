@@ -2,7 +2,7 @@ use std::{error::Error, fmt::Display};
 
 use crate::parser::*;
 
-/// Result type used accross the library
+/// Result type used across the library
 pub type Result<T> = std::result::Result<T, RollError>;
 
 /// The error reported
@@ -10,7 +10,7 @@ pub type Result<T> = std::result::Result<T, RollError>;
 pub enum RollError {
     /// Error while parsing the expression, emitted by `pest`
     ParseError(Box<pest::error::Error<Rule>>),
-    /// Any other error while walking the AST, the String contains an explaination of what happened
+    /// Any other error while walking the AST, the String contains an explanation of what happened
     ParamError(String),
 }
 
