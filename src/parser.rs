@@ -355,7 +355,7 @@ fn keep_low<T: Clone, Key: Ord + Copy>(
         .enumerate()
         .map(|(i, (_, index))| (i < to_keep, *index))
         .collect();
-    flagged_indexes.sort_by_key(|(keep, key)| *key);
+    flagged_indexes.sort_by_key(|(_keep, key)| *key);
 
     Ok(flagged_indexes
         .iter()
@@ -396,7 +396,7 @@ fn compute_roll<RNG: DiceRollSource>(
     let mut rolls = SingleRollResult::new();
     let number_of_dice = dice.next().unwrap();
     let number_of_dice = match number_of_dice.as_rule() {
-        Rule::nb_dice => {
+        Rule::number_of_dice => {
             dice.next(); // skip `d` token
             let n = number_of_dice.as_str().parse::<u64>().unwrap();
             if n > MAX_NUMBER_OF_DICE {
@@ -460,7 +460,7 @@ fn compute_roll<RNG: DiceRollSource>(
     Ok(rolls)
 }
 
-// compute a whole roll expression
+/// compute a whole roll expression
 pub(crate) fn compute<RNG: DiceRollSource>(
     expr: Pairs<Rule>,
     rng: &mut RNG,

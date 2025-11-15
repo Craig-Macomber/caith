@@ -911,7 +911,7 @@ mod tests {
     fn infinite_reroll() {
         let result = SingleRoller::new("1d1 ir1").unwrap_err();
         match result {
-            RollError::ParseError(error) => assert!(false),
+            RollError::ParseError(_) => assert!(false),
             RollError::ParamError(text) => assert_eq!(text,"Cannot infinitely reroll dice of 1 or lower then the maximum roll is 1: this would go on forever")
         }
     }

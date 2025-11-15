@@ -1,14 +1,14 @@
 number = @{ ASCII_DIGIT+ }
 float = @{ ("+" | "-")? ~ ASCII_DIGIT+ ~ fraction }
 fraction = @{ "." ~ ASCII_DIGIT{1,2}}
-nb_dice = @{ ASCII_NONZERO_DIGIT+ ~ ASCII_DIGIT* }
+number_of_dice = @{ ASCII_NONZERO_DIGIT+ ~ ASCII_DIGIT* }
 op = _{ add | sub | mul | div }
 add = { "+" }
 sub = { "-" }
 mul = { "*" }
 div = { "/" }
 
-dice = { nb_dice? ~ (roll ~ dice_side) ~ option* ~ target_failure{, 3} }
+dice = { number_of_dice? ~ (roll ~ dice_side) ~ option* ~ target_failure{, 3} }
 dice_side = _{ number | fudge }
 fudge = { "F" | "f" }
 roll = { "d" | "D" }
