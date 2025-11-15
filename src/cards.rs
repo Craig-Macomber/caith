@@ -1,4 +1,4 @@
-//! This module takes care of drawing cards from a standard deck with optionnal Joker in it.
+//! This module takes care of drawing cards from a standard deck with optional Joker in it.
 //!
 
 use rand::prelude::SliceRandom;
@@ -57,7 +57,7 @@ impl std::fmt::Display for Card {
 }
 
 #[derive(Debug)]
-/// Represent a standard deck of cards of 52 cards, with optionnal Jokers
+/// Represent a standard deck of cards of 52 cards, with optional Jokers
 ///
 /// `Deref` gives back the internal `Vec<Card>`
 ///

@@ -36,7 +36,7 @@ Options:
 + - / * : modifiers
 e# : Explode value. If number is omitted, we use dice sides
 ie# or !# : Indefinite explode value, If number is omitted, we use dice sides
-K#  : Keeping # highest (upperacse "K")
+K#  : Keeping # highest (uppercase "K")
 k#  : Keeping # lowest (lowercase "k")
 D#  : Dropping the highest (uppercase "D")
 d#  : Dropping the lowest (lowercase "d")

@@ -34,7 +34,7 @@
 //! + - / * : modifiers
 //! e# : Explode value. If number is omitted, we use dice sides
 //! ie# or !# : Indefinite explode value, If number is omitted, we use dice sides
-//! K#  : Keeping # highest (upperacse "K")
+//! K#  : Keeping # highest (uppercase "K")
 //! k#  : Keeping # lowest (lowercase "k")
 //! D#  : Dropping the highest (uppercase "D")
 //! d#  : Dropping the lowest (lowercase "d")
@@ -682,15 +682,15 @@ mod tests {
         let res = res.get_result();
         if let RollResultType::Single(res) = res {
             // We rolled one of every number. That's a success each for the 7 and 8, and two
-            // success each for the 9 and 10. So a toal of six.
+            // success each for the 9 and 10. So a total of six.
             assert_eq!(res.get_total(), 6);
         } else {
             assert!(false);
         }
     }
 
-    // Where a user has asked for a doubles threashold that is lower than the single threashold,
-    // the single threashold is ignored.
+    // Where a user has asked for a doubles threshold that is lower than the single threshold,
+    // the single threshold is ignored.
     #[test]
     fn target_number_double_lower_than_target_test() {
         let r = SingleRoller::new("10d10 tt7 t9").unwrap();
