@@ -338,7 +338,7 @@ pub(crate) fn apply_total_modifier<T: Clone>(
 }
 
 /// Copy `v`, but with the top (as defined by `f`) `to_drop` entries flagged with false and the rest with true.
-fn keep_low<T: Clone, Key: Ord + Copy>(
+pub(crate) fn keep_low<T: Clone, Key: Ord + Copy>(
     v: &[T],
     to_keep: usize,
     f: impl Fn(&T) -> Key,

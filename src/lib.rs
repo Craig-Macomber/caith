@@ -14,7 +14,7 @@
 //! # Usage
 //!
 //! ```
-//! use caith::{Roller, RollResult, RollResultType};
+//! use caith::{Roller, RollResult, RollResultType, Rollable};
 //!
 //! // ...
 //! let result = Roller::new("1d6 : initiative").unwrap().roll().unwrap();
