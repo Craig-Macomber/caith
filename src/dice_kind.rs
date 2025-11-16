@@ -180,16 +180,8 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
                 if *n >= dice.max() {
                     return Err("Infinite rerolls".into());
                 }
-                let mut new_rolls = vec![];
-                loop {
-                    let next = dice.roll(rng);
-
-                    new_rolls.push(next);
-                    if next > *n {
-                        break;
-                    }
-                }
-                if new_rolls.len() >= 0 {
+                let new_rolls = roll_until(dice, roll, |next| next > *n, rng);
+                if new_rolls.len() > 0 {
                     RollModifier::Reroll(new_rolls)
                 } else {
                     RollModifier::None
@@ -206,16 +198,8 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
                 if *n <= dice.min() {
                     return Err("Infinite explodes".into());
                 }
-                let mut new_rolls = vec![];
-                loop {
-                    let next = dice.roll(rng);
-
-                    new_rolls.push(next);
-                    if next < *n {
-                        break;
-                    }
-                }
-                if new_rolls.len() >= 0 {
+                let new_rolls = roll_until(dice, roll, |next| next < *n, rng);
+                if new_rolls.len() > 0 {
                     RollModifier::Explode(new_rolls)
                 } else {
                     RollModifier::None
@@ -230,19 +214,26 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
     }
 }
 
-enum RollWithModifier<Roll> {
-    Roll(Roll),
-    Modified(Rc<ModifiedRoll<Self>>),
+/// Rolls until end_condition is true for a roll value.
+/// Returns all new rolls.
+/// May return empty if condition was true for provided roll.
+fn roll_until<Dice: DiceKind>(
+    dice: Dice,
+    mut roll: Dice::Roll,
+    end_condition: impl Fn(Dice::Roll) -> bool,
+    rng: &mut impl DiceRollSource,
+) -> Vec<Dice::Roll> {
+    let mut new_rolls = vec![];
+    loop {
+        if end_condition(roll) {
+            return new_rolls;
+        }
+        roll = dice.roll(rng);
+        new_rolls.push(roll);
+    }
 }
 
 impl<Dice: DiceKind + Clone> RollBatch<Dice> {
-    // pub fn keep_or_drop(&self, op: KeepOrDrop) -> Result<Self> {
-    //     Ok(RollBatch {
-    //         dice: self.dice.clone(),
-    //         rolls: op.apply(&self.rolls, |d| *d).map(|x| filter(&x))?,
-    //     })
-    // }
-
     pub fn keep_or_drop(&self, op: KeepOrDrop) -> Result<ModifiedRollBatch<Dice::Roll>> {
         let rolls = op.apply(&self.rolls, |d| *d)?;
 
@@ -259,13 +250,6 @@ impl<Dice: DiceKind + Clone> RollBatch<Dice> {
                 .collect(),
         })
     }
-}
-
-fn filter<T: Clone>(data: &Vec<(bool, T)>) -> Vec<T> {
-    data.iter()
-        .filter(|(b, _)| *b)
-        .map(|(_, v)| v.clone())
-        .collect()
 }
 
 /// Specification for a single batch of dice to roll and process.
