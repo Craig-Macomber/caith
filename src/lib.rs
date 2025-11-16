@@ -188,30 +188,29 @@ where
     }
 }
 
-impl Roller {
-    /// Store the input
-    ///
-    /// As of version 2.0.0, it always returns `Ok(Self)`.
-    ///
-    /// This is to have a stable API for further optimization where the parsing is done here (so it
-    /// can fail) and saved, see `Roller` documentation above.
-    ///
-    pub fn new(input: &str) -> Result<Self> {
-        Ok(Roller(input.to_owned()))
-    }
-
+/// Something that can be rolled
+pub trait Rollable {
+    /// Output of the roll
+    type Roll;
     /// Evaluate and roll the dices with default Rng source (`rand::thread_rng()`)
-    pub fn roll(&self) -> Result<RollResult> {
+    fn roll(&self) -> Self::Roll {
         self.roll_with(&mut rand::rng())
     }
 
     /// Evaluate and roll the dices with provided rng source
-    pub fn roll_with<RNG: Rng>(&self, rng: &mut RNG) -> Result<RollResult> {
+    fn roll_with(&self, rng: &mut impl Rng) -> Self::Roll {
         self.roll_with_source(&mut RngDiceRollSource { rng })
     }
 
     /// Evaluate and roll the dice with provided dice roll source
-    pub fn roll_with_source<RNG: DiceRollSource>(&self, rng: &mut RNG) -> Result<RollResult> {
+    fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> Self::Roll;
+}
+
+impl Rollable for Roller {
+    type Roll = Result<RollResult>;
+
+    /// Evaluate and roll the dice with provided dice roll source
+    fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> Result<RollResult> {
         let mut pairs = RollParser::parse(Rule::command, &self.0)?;
         let expr_type = pairs.next().unwrap();
         let mut roll_res = match expr_type.as_rule() {
@@ -228,6 +227,19 @@ impl Roller {
             }
         }
         Ok(roll_res)
+    }
+}
+
+impl Roller {
+    /// Store the input
+    ///
+    /// As of version 2.0.0, it always returns `Ok(Self)`.
+    ///
+    /// This is to have a stable API for further optimization where the parsing is done here (so it
+    /// can fail) and saved, see `Roller` documentation above.
+    ///
+    pub fn new(input: &str) -> Result<Self> {
+        Ok(Roller(input.to_owned()))
     }
 
     fn process_repeated_expr<RNG: DiceRollSource>(
@@ -315,6 +327,14 @@ impl Roller {
 #[derive(Clone, Debug)]
 pub struct SingleRoller(String);
 
+impl Rollable for SingleRoller {
+    type Roll = SingleRollResult;
+
+    fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> SingleRollResult {
+        self.try_roll_with_source(rng).unwrap()
+    }
+}
+
 impl SingleRoller {
     /// Store the input
     pub fn new(input: &str) -> Result<Self> {
@@ -325,21 +345,6 @@ impl SingleRoller {
             Ok(_) => Ok(r),
             Err(e) => Err(e),
         }
-    }
-
-    /// Evaluate and roll the dices with default Rng source (`rand::rng()`)
-    pub fn roll(&self) -> SingleRollResult {
-        self.roll_with(&mut rand::rng())
-    }
-
-    /// Evaluate and roll the dices with provided rng source
-    pub fn roll_with(&self, rng: &mut impl Rng) -> SingleRollResult {
-        self.roll_with_source(&mut RngDiceRollSource { rng })
-    }
-
-    /// Evaluate and roll the dice with provided dice roll source
-    pub fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> SingleRollResult {
-        self.try_roll_with_source(rng).unwrap()
     }
 
     /// Evaluate and roll the dice with provided dice roll source

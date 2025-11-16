@@ -1,6 +1,6 @@
 use std::{collections::HashSet, hash::Hash, num::NonZeroU32, rc::Rc};
 
-use crate::{parser::DiceRollSource, Result};
+use crate::{parser::DiceRollSource, Result, Rollable};
 
 /// A kind of dice which can be rolled.
 pub trait DiceKind: Copy {
@@ -276,11 +276,10 @@ pub struct RollSpec<Dice: DiceKind> {
     aggregator: Aggregator<Dice::Roll>,
 }
 
-impl<Dice: DiceKind> RollSpec<Dice> {
-    pub fn try_roll_with_source(
-        &self,
-        rng: &mut impl DiceRollSource,
-    ) -> Result<EvaluatedRollSpec<Dice>> {
+impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
+    type Roll = Result<EvaluatedRollSpec<Dice>>;
+
+    fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> Result<EvaluatedRollSpec<Dice>> {
         let mut rolls = RollBatch {
             rolls: (0..self.number_of_dice)
                 .map(|_| self.dice.roll(rng))
@@ -451,7 +450,7 @@ mod tests {
             aggregator: Aggregator::Sum,
         };
         let result = spec
-            .try_roll_with_source(&mut IteratorDiceRollSource {
+            .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
             })
             .unwrap();
@@ -467,7 +466,7 @@ mod tests {
             aggregator: Aggregator::Sum,
         };
         let result = spec
-            .try_roll_with_source(&mut IteratorDiceRollSource {
+            .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
             })
             .unwrap();
