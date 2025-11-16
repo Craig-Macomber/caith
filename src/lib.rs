@@ -143,6 +143,7 @@ use pest::{
 
 pub mod helpers;
 
+pub mod dice_kind;
 mod error;
 mod parser;
 mod rollresult;
