@@ -332,17 +332,17 @@ impl SingleRoller {
     }
 
     /// Evaluate and roll the dices with provided rng source
-    pub fn roll_with<RNG: Rng>(&self, rng: &mut RNG) -> SingleRollResult {
+    pub fn roll_with(&self, rng: &mut impl Rng) -> SingleRollResult {
         self.roll_with_source(&mut RngDiceRollSource { rng })
     }
 
     /// Evaluate and roll the dice with provided dice roll source
-    pub fn roll_with_source<RNG: DiceRollSource>(&self, rng: &mut RNG) -> SingleRollResult {
+    pub fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> SingleRollResult {
         self.try_roll_with_source(rng).unwrap()
     }
 
     /// Evaluate and roll the dice with provided dice roll source
-    fn try_roll_with_source<RNG: DiceRollSource>(&self, rng: &mut RNG) -> Result<SingleRollResult> {
+    fn try_roll_with_source(&self, rng: &mut impl DiceRollSource) -> Result<SingleRollResult> {
         // Extract root expression (expr)
         let expr = {
             let mut pairs = RollParser::parse(Rule::single_command, &self.0)?;

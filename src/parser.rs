@@ -389,10 +389,7 @@ mod tests {
     }
 }
 
-fn compute_roll<RNG: DiceRollSource>(
-    mut dice: Pairs<Rule>,
-    rng: &mut RNG,
-) -> Result<SingleRollResult> {
+fn compute_roll(mut dice: Pairs<Rule>, rng: &mut impl DiceRollSource) -> Result<SingleRollResult> {
     let mut rolls = SingleRollResult::new();
     let number_of_dice = dice.next().unwrap();
     let number_of_dice = match number_of_dice.as_rule() {
@@ -461,9 +458,9 @@ fn compute_roll<RNG: DiceRollSource>(
 }
 
 /// compute a whole roll expression
-pub(crate) fn compute<RNG: DiceRollSource>(
+pub(crate) fn compute(
     expr: Pairs<Rule>,
-    rng: &mut RNG,
+    rng: &mut impl DiceRollSource,
     is_block: bool,
 ) -> Result<SingleRollResult> {
     let res = get_climber().climb(
@@ -527,11 +524,7 @@ pub(crate) fn find_first_dice(expr: &mut Pairs<Rule>) -> Option<String> {
     None
 }
 
-pub(crate) fn roll_dice<RNG: DiceRollSource>(
-    num: u64,
-    sides: u64,
-    rng: &mut RNG,
-) -> Vec<DiceResult> {
+pub(crate) fn roll_dice(num: u64, sides: u64, rng: &mut impl DiceRollSource) -> Vec<DiceResult> {
     (0..num)
         .map(|_| DiceResult::new(rng.roll_single_die(sides), sides))
         .collect()
