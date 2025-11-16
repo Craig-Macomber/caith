@@ -14,7 +14,7 @@ fudge = { "F" | "f" }
 roll = { "d" | "D" }
 option = _{ explode | i_explode | reroll | i_reroll | keep_hi | keep_lo | drop_hi | drop_lo }
 target_failure = _{ target | double_target | failure }
-explode = { "e" ~ number }
+explode = { "e" ~ number? }
 i_explode = { ("ie" | "!") ~ number? }
 reroll = { "r" ~ number }
 i_reroll = { "ir" ~ number }
@@ -38,5 +38,6 @@ reason = { ":" ~ ANY* }
 sort = { "#" }
 command = _{ SOI ~ (repeated_expr | expr) ~ reason? ~ EOI }
 single_command = _{ SOI ~ expr ~ EOI }
+dice_command = _{ SOI ~ dice ~ EOI }
 
 WHITESPACE = _{ " " | " " }

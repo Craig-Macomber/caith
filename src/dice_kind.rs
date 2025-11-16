@@ -1,7 +1,12 @@
-use std::{collections::HashSet, fmt::Display, hash::Hash, iter::Chain, num::NonZeroU32};
+use std::{collections::HashSet, fmt::Display, hash::Hash, num::NonZeroU32};
+
+use pest::{
+    iterators::{Pair, Pairs},
+    Parser,
+};
 
 use crate::{
-    parser::{keep_low, DiceRollSource},
+    parser::{keep_low, DiceRollSource, RollParser, Rule},
     Result, Rollable,
 };
 
@@ -251,7 +256,7 @@ impl<TRoll: Roll> Display for PerRollModifier<TRoll> {
             PerRollModifier::RerollOnce(r) => write!(f, "r{r}"),
             PerRollModifier::RerollUnlimited(r) => write!(f, "ir{r}"),
             PerRollModifier::ExplodeOnce(r) => write!(f, "e{r}"),
-            PerRollModifier::ExplodeUnlimited(r) => write!(f, "ie{r}"),
+            PerRollModifier::ExplodeUnlimited(r) => write!(f, "!{r}"),
         }
     }
 }
@@ -540,6 +545,190 @@ impl KeepOrDrop {
     }
 }
 
+fn parse_dice_command(s: &str) -> Result<RollSpec<NonZeroU32>> {
+    let expr = {
+        let mut pairs = RollParser::parse(Rule::dice_command, &s)?;
+        let expr_type = pairs.next().unwrap();
+        assert_eq!(expr_type.as_rule(), Rule::dice);
+        expr_type.into_inner()
+    };
+
+    let roll_res = parse_dice(expr)?;
+    Ok(roll_res)
+}
+
+mod parse {
+    use pest::Parser;
+    use pest_derive::Parser;
+
+    #[derive(Parser)]
+    #[grammar = "caith.pest"]
+    struct CaithParser;
+
+    // fn main(s: &str) -> Result<RollSpec<NonZeroU32>> {
+    //     let pairs = CaithParser::parse(Rule::dice_command, "a1 b2")?;
+
+    //     // Because ident_list is silent, the iterator will contain idents
+    //     for pair in pairs {
+    //         // A pair is a combination of the rule which matched and a span of input
+    //         println!("Rule:    {:?}", pair.as_rule());
+    //         println!("Span:    {:?}", pair.as_span());
+    //         println!("Text:    {}", pair.as_str());
+
+    //         // A pair can be converted to an iterator of the tokens which make it up:
+    //         for inner_pair in pair.into_inner() {
+    //             match inner_pair.as_rule() {
+    //                 Rule::alpha => println!("Letter:  {}", inner_pair.as_str()),
+    //                 Rule::digit => println!("Digit:   {}", inner_pair.as_str()),
+    //                 _ => unreachable!(),
+    //             };
+    //         }
+    //     }
+    // }
+}
+
+fn extract_option_value(option: Pair<Rule>) -> Option<u32> {
+    option
+        .into_inner()
+        .next()
+        .map(|p| p.as_str().parse::<u32>().unwrap())
+}
+
+fn parse_dice(mut dice: Pairs<Rule>) -> Result<RollSpec<NonZeroU32>> {
+    let number_of_dice = dice.next().unwrap();
+    let number_of_dice = match number_of_dice.as_rule() {
+        Rule::number_of_dice => {
+            dice.next(); // skip `d` token
+            number_of_dice.as_str().parse::<usize>().unwrap() // TODO: proper error
+        }
+        Rule::roll => 1, // no number before `d`, assume 1 dice
+        _ => unreachable!("{:?}", number_of_dice),
+    };
+
+    let pair = dice.next().unwrap();
+    let dice_parsed = match pair.as_rule() {
+        Rule::number => pair.as_str().parse::<NonZeroU32>().unwrap(),
+        //TODO:  Rule::fudge => (6, true),
+        _ => unreachable!("{:?}", pair),
+    };
+
+    let sides: u32 = DiceKind::max(&dice_parsed).into();
+
+    let mut modifiers: Vec<RollBatchModifier<u32>> = vec![];
+
+    let mut aggregator: Aggregator<u32> = Aggregator::Sum;
+    let mut next_option = dice.next();
+
+    while next_option.is_some() {
+        let option = next_option.unwrap();
+
+        match &option.as_rule() {
+            Rule::explode => {
+                let value = extract_option_value(option).unwrap_or(sides);
+                modifiers.push(RollBatchModifier::PerRollModifier(
+                    PerRollModifier::ExplodeOnce(value),
+                ));
+            }
+            Rule::i_explode => {
+                let value = extract_option_value(option).unwrap_or(sides);
+                modifiers.push(RollBatchModifier::PerRollModifier(
+                    PerRollModifier::ExplodeUnlimited(value),
+                ));
+            }
+            Rule::reroll => {
+                let value = extract_option_value(option).unwrap();
+                modifiers.push(RollBatchModifier::PerRollModifier(
+                    PerRollModifier::RerollOnce(value),
+                ));
+            }
+            Rule::i_reroll => {
+                let value = extract_option_value(option).unwrap();
+                modifiers.push(RollBatchModifier::PerRollModifier(
+                    PerRollModifier::RerollUnlimited(value),
+                ));
+            }
+            Rule::keep_hi => {
+                let value = extract_option_value(option).unwrap();
+                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepHi(
+                    usize::try_from(value).unwrap(),
+                )));
+            }
+            Rule::keep_lo => {
+                let value = extract_option_value(option).unwrap();
+                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepLo(
+                    usize::try_from(value).unwrap(),
+                )));
+            }
+            Rule::drop_hi => {
+                let value = extract_option_value(option).unwrap();
+                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::DropHi(
+                    usize::try_from(value).unwrap(),
+                )));
+            }
+            Rule::drop_lo => {
+                let value = extract_option_value(option).unwrap();
+                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::DropLo(
+                    usize::try_from(value).unwrap(),
+                )));
+            }
+            Rule::target => {
+                let value_or_enum = option.into_inner().next().unwrap();
+                match value_or_enum.as_rule() {
+                    Rule::number => {
+                        let value = value_or_enum.as_str().parse::<u32>().unwrap();
+                        let (target, fail) = match aggregator {
+                            Aggregator::TargetFailureDouble(t, f, 0) => (t, f),
+                            Aggregator::Sum => (sides + 1, 0),
+                            _ => Err("Invalid: targets")?,
+                        };
+                        aggregator = Aggregator::TargetFailureDouble(target, fail, value)
+                    }
+
+                    Rule::target_enum => {
+                        let numbers_list = value_or_enum.into_inner();
+                        let numbers_list: Vec<_> = numbers_list
+                            .map(|p| p.as_str().parse::<u32>().unwrap())
+                            .collect();
+                        aggregator =
+                            Aggregator::TargetEnum(HashSet::from_iter(numbers_list.into_iter()))
+                    }
+                    _ => unreachable!(),
+                };
+            }
+            Rule::double_target => {
+                let value = extract_option_value(option).unwrap();
+                let (target, fail) = match aggregator {
+                    Aggregator::TargetFailureDouble(t, f, 0) => (t, f),
+                    Aggregator::Sum => (value, 0),
+                    _ => Err("Invalid: targets")?,
+                };
+                aggregator = Aggregator::TargetFailureDouble(target, fail, value)
+            }
+            Rule::failure => {
+                let value = extract_option_value(option).unwrap();
+                let (target, double_target) = match aggregator {
+                    Aggregator::TargetFailureDouble(t, 0, d) => (t, d),
+                    Aggregator::Sum => (0, sides + 1),
+                    _ => Err("Invalid: targets")?,
+                };
+                aggregator = Aggregator::TargetFailureDouble(target, value, double_target)
+            }
+            _ => unreachable!("{:#?}", option),
+        }
+
+        next_option = dice.next();
+    }
+
+    Ok(RollSpec {
+        dice: dice_parsed,
+        number_of_dice,
+        modifiers,
+        aggregator,
+    })
+}
+
+///
+
 #[cfg(test)]
 mod tests {
     use crate::tests::IteratorDiceRollSource;
@@ -622,5 +811,37 @@ mod tests {
             result.format_history(true, Verbosity::Verbose),
             "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**🡵5, **4**🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1 🡲 [5, 4, 6]"
         );
+    }
+
+    #[test]
+    fn dice_command_sum() {
+        let spec = parse_dice_command("2d20 e2").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..21).chain(Some(20)),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format_history(true, Verbosity::Medium),
+            "[1, **2**🡵3]e2"
+        );
+
+        assert_eq!(result.total, 6);
+    }
+
+    #[test]
+    fn dice_command_check() {
+        let spec = parse_dice_command("20d20 e tt20").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..21).chain(Some(20)),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format_history(true, Verbosity::Medium),
+            "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, **20**🡵20]e20"
+        );
+
+        assert_eq!(result.total, 4);
     }
 }
