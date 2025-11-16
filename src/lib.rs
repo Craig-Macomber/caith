@@ -203,14 +203,14 @@ pub trait Rollable {
     }
 
     /// Evaluate and roll the dice with provided dice roll source
-    fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> Self::Roll;
+    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Self::Roll;
 }
 
 impl Rollable for Roller {
     type Roll = Result<RollResult>;
 
     /// Evaluate and roll the dice with provided dice roll source
-    fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> Result<RollResult> {
+    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Result<RollResult> {
         let mut pairs = RollParser::parse(Rule::command, &self.0)?;
         let expr_type = pairs.next().unwrap();
         let mut roll_res = match expr_type.as_rule() {
@@ -242,9 +242,9 @@ impl Roller {
         Ok(Roller(input.to_owned()))
     }
 
-    fn process_repeated_expr<RNG: DiceRollSource>(
+    fn process_repeated_expr(
         expr_type: Pair<Rule>,
-        rng: &mut RNG,
+        rng: &mut dyn DiceRollSource,
     ) -> Result<RollResult> {
         let mut pairs = expr_type.into_inner();
         let expr = pairs.next().unwrap();
@@ -330,7 +330,7 @@ pub struct SingleRoller(String);
 impl Rollable for SingleRoller {
     type Roll = SingleRollResult;
 
-    fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> SingleRollResult {
+    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> SingleRollResult {
         self.try_roll_with_source(rng).unwrap()
     }
 }
@@ -348,7 +348,7 @@ impl SingleRoller {
     }
 
     /// Evaluate and roll the dice with provided dice roll source
-    fn try_roll_with_source(&self, rng: &mut impl DiceRollSource) -> Result<SingleRollResult> {
+    fn try_roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Result<SingleRollResult> {
         // Extract root expression (expr)
         let expr = {
             let mut pairs = RollParser::parse(Rule::single_command, &self.0)?;

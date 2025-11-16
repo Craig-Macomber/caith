@@ -45,12 +45,12 @@ struct OptionResult {
 
 // Struct to have a singleton of PrecClimber without using once_cell
 #[derive(Clone)]
-struct Climber {
+pub(crate) struct Climber {
     inner: Arc<RwLock<PrattParser<Rule>>>,
 }
 
 impl Climber {
-    fn climb<'i, P, F, G, T>(&self, pairs: P, primary: F, infix: G) -> T
+    pub fn climb<'i, P, F, G, T>(&self, pairs: P, primary: F, infix: G) -> T
     where
         P: Iterator<Item = Pair<'i, Rule>>,
         F: FnMut(Pair<'i, Rule>) -> T,
@@ -65,7 +65,7 @@ impl Climber {
     }
 }
 
-fn get_climber() -> Climber {
+pub(crate) fn get_climber() -> Climber {
     static mut PREC_CLIMBER: *const Climber = 0 as *const Climber;
     static ONCE: Once = Once::new();
 
@@ -91,13 +91,13 @@ fn get_climber() -> Climber {
     }
 }
 
-fn compute_explode<RNG: DiceRollSource>(
+fn compute_explode(
     rolls: &mut SingleRollResult,
     sides: u64,
     res: Vec<DiceResult>,
     option: Pair<Rule>,
     prev_modifier: &TotalModifier,
-    rng: &mut RNG,
+    rng: &mut dyn DiceRollSource,
 ) -> OptionResult {
     let value = extract_option_value(option).unwrap_or(sides);
     let nb = res.iter().filter(|x| x.res >= value).count() as u64;
@@ -119,13 +119,13 @@ fn compute_explode<RNG: DiceRollSource>(
     }
 }
 
-fn compute_i_explode<RNG: DiceRollSource>(
+fn compute_i_explode(
     rolls: &mut SingleRollResult,
     sides: u64,
     res: Vec<DiceResult>,
     option: Pair<Rule>,
     prev_modifier: &TotalModifier,
-    rng: &mut RNG,
+    rng: &mut dyn DiceRollSource,
 ) -> OptionResult {
     let value = extract_option_value(option).unwrap_or(sides);
     if prev_modifier != &TotalModifier::None(Rule::explode)
@@ -146,12 +146,12 @@ fn compute_i_explode<RNG: DiceRollSource>(
     }
 }
 
-fn compute_reroll<RNG: DiceRollSource>(
+fn compute_reroll(
     rolls: &mut SingleRollResult,
     sides: u64,
     res: Vec<DiceResult>,
     option: Pair<Rule>,
-    rng: &mut RNG,
+    rng: &mut dyn DiceRollSource,
 ) -> OptionResult {
     let value = extract_option_value(option).unwrap();
     let reroll = compute_reroll_inner(rolls, sides, &res, value, rng);
@@ -162,12 +162,12 @@ fn compute_reroll<RNG: DiceRollSource>(
     }
 }
 
-fn compute_reroll_inner<RNG: DiceRollSource>(
+fn compute_reroll_inner(
     rolls: &mut SingleRollResult,
     sides: u64,
     res: &Vec<DiceResult>,
     value: u64,
-    rng: &mut RNG,
+    rng: &mut dyn DiceRollSource,
 ) -> Option<Vec<DiceResult>> {
     let mut has_rerolled = false;
     let mut rerolls: Vec<Vec<DiceResult>> = vec![];
@@ -195,12 +195,12 @@ fn compute_reroll_inner<RNG: DiceRollSource>(
     None
 }
 
-fn compute_i_reroll<RNG: DiceRollSource>(
+fn compute_i_reroll(
     rolls: &mut SingleRollResult,
     sides: u64,
     mut res: Vec<DiceResult>,
     option: Pair<Rule>,
-    rng: &mut RNG,
+    rng: &mut dyn DiceRollSource,
 ) -> Result<OptionResult> {
     let value = extract_option_value(option).unwrap();
     if value >= sides {
@@ -222,12 +222,12 @@ fn compute_i_reroll<RNG: DiceRollSource>(
     }
 }
 
-fn compute_option<RNG: DiceRollSource>(
+fn compute_option(
     mut rolls: &mut SingleRollResult,
     sides: u64,
     res: Vec<DiceResult>,
     option: Pair<Rule>,
-    rng: &mut RNG,
+    rng: &mut dyn DiceRollSource,
     prev_modifier: &TotalModifier,
 ) -> Result<OptionResult> {
     fn keep_or_drop(
@@ -389,7 +389,7 @@ mod tests {
     }
 }
 
-fn compute_roll(mut dice: Pairs<Rule>, rng: &mut impl DiceRollSource) -> Result<SingleRollResult> {
+fn compute_roll(mut dice: Pairs<Rule>, rng: &mut dyn DiceRollSource) -> Result<SingleRollResult> {
     let mut rolls = SingleRollResult::new();
     let number_of_dice = dice.next().unwrap();
     let number_of_dice = match number_of_dice.as_rule() {
@@ -460,7 +460,7 @@ fn compute_roll(mut dice: Pairs<Rule>, rng: &mut impl DiceRollSource) -> Result<
 /// compute a whole roll expression
 pub(crate) fn compute(
     expr: Pairs<Rule>,
-    rng: &mut impl DiceRollSource,
+    rng: &mut dyn DiceRollSource,
     is_block: bool,
 ) -> Result<SingleRollResult> {
     let res = get_climber().climb(
@@ -524,7 +524,7 @@ pub(crate) fn find_first_dice(expr: &mut Pairs<Rule>) -> Option<String> {
     None
 }
 
-pub(crate) fn roll_dice(num: u64, sides: u64, rng: &mut impl DiceRollSource) -> Vec<DiceResult> {
+pub(crate) fn roll_dice(num: u64, sides: u64, rng: &mut dyn DiceRollSource) -> Vec<DiceResult> {
     (0..num)
         .map(|_| DiceResult::new(rng.roll_single_die(sides), sides))
         .collect()

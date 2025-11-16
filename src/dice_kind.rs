@@ -6,14 +6,14 @@ use pest::{
 };
 
 use crate::{
-    parser::{keep_low, DiceRollSource, RollParser, Rule},
+    parser::{get_climber, keep_low, DiceRollSource, RollParser, Rule},
     Result, Rollable,
 };
 
 /// A kind of dice which can be rolled.
 pub trait DiceKind: Copy {
     type Roll: Roll;
-    fn roll(&self, rng: &mut impl DiceRollSource) -> Self::Roll;
+    fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll;
     fn max(&self) -> Self::Roll;
     fn min(&self) -> Self::Roll;
 }
@@ -22,7 +22,7 @@ pub trait DiceKind: Copy {
 impl DiceKind for NonZeroU32 {
     type Roll = u32;
 
-    fn roll(&self, rng: &mut impl DiceRollSource) -> Self::Roll {
+    fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
         let value = rng.roll_single_die(self.get().into());
         <u64 as TryInto<u32>>::try_into(value).unwrap()
     }
@@ -58,7 +58,7 @@ impl Display for FudgeRoll {
 }
 
 impl FudgeRoll {
-    pub fn new(rng: &mut impl DiceRollSource) -> Self {
+    pub fn new(rng: &mut dyn DiceRollSource) -> Self {
         let value = rng.roll_single_die(3);
         FudgeRoll {
             value: <u64 as TryInto<i8>>::try_into(value).unwrap() - 2,
@@ -78,7 +78,7 @@ impl Roll for u32 {}
 impl DiceKind for Fudge {
     type Roll = FudgeRoll;
 
-    fn roll(&self, rng: &mut impl DiceRollSource) -> Self::Roll {
+    fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
         FudgeRoll::new(rng)
     }
     fn max(&self) -> Self::Roll {
@@ -190,7 +190,7 @@ impl<TRoll: Roll> ModifiedRollBatch<TRoll> {
     pub fn new<Dice: DiceKind<Roll = TRoll>>(
         batch: &RollBatch<Dice>,
         modifier: RollBatchModifier<TRoll>,
-        rng: &mut impl DiceRollSource,
+        rng: &mut dyn DiceRollSource,
     ) -> Result<Self> {
         let rolls = match modifier {
             RollBatchModifier::KeepOrDrop(op) => batch.keep_or_drop(op)?,
@@ -279,7 +279,7 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
         &self,
         dice: Dice,
         roll: TRoll,
-        rng: &mut impl DiceRollSource,
+        rng: &mut dyn DiceRollSource,
     ) -> Result<ModifiedRoll<TRoll>> {
         let modifier = match self {
             PerRollModifier::RerollOnce(n) => {
@@ -334,7 +334,7 @@ fn roll_until<Dice: DiceKind>(
     dice: Dice,
     mut roll: Dice::Roll,
     end_condition: impl Fn(Dice::Roll) -> bool,
-    rng: &mut impl DiceRollSource,
+    rng: &mut dyn DiceRollSource,
 ) -> Vec<Dice::Roll> {
     let mut new_rolls = vec![];
     loop {
@@ -373,10 +373,156 @@ pub struct RollSpec<Dice: DiceKind> {
     aggregator: Aggregator<Dice::Roll>,
 }
 
-impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
-    type Roll = Result<EvaluatedRollSpec<Dice>>;
+type Expression = Box<dyn ExpressionRollable>;
+type ExpressionResult = Result<Box<dyn EvaluatedExpression>>;
 
-    fn roll_with_source(&self, rng: &mut impl DiceRollSource) -> Result<EvaluatedRollSpec<Dice>> {
+trait ExpressionRollable {
+    /// Evaluate and roll the dice with provided dice roll source
+    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult;
+}
+
+impl Rollable for dyn ExpressionRollable {
+    type Roll = ExpressionResult;
+
+    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
+        ExpressionRollable::expression_roll(self, rng)
+    }
+}
+
+impl Rollable for Expression {
+    type Roll = ExpressionResult;
+
+    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
+        ExpressionRollable::expression_roll(&**self, rng)
+    }
+}
+
+impl<Dice: DiceKind + 'static> ExpressionRollable for RollSpec<Dice> {
+    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
+        let x = self.dyn_roll(rng)?;
+        let boxed: Box<dyn EvaluatedExpression> = Box::new(x);
+        Ok(boxed)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+impl BinaryOp {
+    fn apply(&self, left: f64, right: f64) -> f64 {
+        match self {
+            BinaryOp::Add => left + right,
+            BinaryOp::Sub => left - right,
+            BinaryOp::Mul => left * right,
+            BinaryOp::Div => left / right,
+        }
+    }
+
+    fn format<T: Display>(&self, left: T, right: T) -> String {
+        format!(
+            "{left} {} {right}",
+            match self {
+                BinaryOp::Add => "+",
+                BinaryOp::Sub => "-",
+                BinaryOp::Mul => "*",
+                BinaryOp::Div => "/",
+            }
+        )
+    }
+}
+
+struct BinaryExpression<T> {
+    left: T,
+    op: BinaryOp,
+    right: T,
+}
+
+impl ExpressionRollable for BinaryExpression<Expression> {
+    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
+        let left = self.left.expression_roll(rng)?;
+        let right = self.right.expression_roll(rng)?;
+        Ok(Box::new(BinaryExpression {
+            left,
+            op: self.op,
+            right,
+        }))
+    }
+}
+
+impl EvaluatedExpression for BinaryExpression<Box<dyn EvaluatedExpression>> {
+    fn total(&self) -> f64 {
+        self.op.apply(self.left.total(), self.right.total())
+    }
+
+    fn format_history(&self, markdown: bool, verbose: Verbosity) -> String {
+        self.op.format(
+            self.left.format_history(markdown, verbose),
+            self.right.format_history(markdown, verbose),
+        )
+    }
+}
+
+impl ExpressionRollable for f64 {
+    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
+        Ok(Box::new(*self))
+    }
+}
+
+impl EvaluatedExpression for f64 {
+    fn total(&self) -> f64 {
+        *self
+    }
+
+    fn format_history(&self, markdown: bool, verbose: Verbosity) -> String {
+        format!("{self}")
+    }
+}
+
+impl ExpressionRollable for i64 {
+    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
+        Ok(Box::new(*self))
+    }
+}
+
+impl EvaluatedExpression for i64 {
+    fn total(&self) -> f64 {
+        *self as f64
+    }
+
+    fn format_history(&self, markdown: bool, verbose: Verbosity) -> String {
+        format!("{self}")
+    }
+}
+
+struct BlockExpression<T> {
+    inner: T,
+}
+
+impl ExpressionRollable for BlockExpression<Expression> {
+    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
+        Ok(Box::new(BlockExpression {
+            inner: self.inner.expression_roll(rng)?,
+        }))
+    }
+}
+
+impl EvaluatedExpression for BlockExpression<Box<dyn EvaluatedExpression>> {
+    fn total(&self) -> f64 {
+        self.inner.total()
+    }
+
+    fn format_history(&self, markdown: bool, verbose: Verbosity) -> String {
+        format!("({})", self.inner.format_history(markdown, verbose))
+    }
+}
+
+impl<Dice: DiceKind> RollSpec<Dice> {
+    fn dyn_roll(&self, rng: &mut dyn DiceRollSource) -> Result<EvaluatedRollSpec<Dice>> {
         let mut rolls = RollBatch {
             rolls: (0..self.number_of_dice)
                 .map(|_| self.dice.roll(rng))
@@ -401,8 +547,16 @@ impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
     }
 }
 
-trait EvaluatedRoll {
-    fn total(&self) -> i64;
+impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
+    type Roll = Result<EvaluatedRollSpec<Dice>>;
+
+    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Result<EvaluatedRollSpec<Dice>> {
+        self.dyn_roll(rng)
+    }
+}
+
+trait EvaluatedExpression {
+    fn total(&self) -> f64;
     fn format_history(&self, markdown: bool, verbose: Verbosity) -> String;
 }
 
@@ -416,15 +570,16 @@ pub struct EvaluatedRollSpec<Dice: DiceKind> {
     final_rolls: RollBatch<Dice>,
 }
 
+#[derive(Clone, Copy)]
 enum Verbosity {
     Short,
     Medium,
     Verbose,
 }
 
-impl<Dice: DiceKind> EvaluatedRoll for EvaluatedRollSpec<Dice> {
-    fn total(&self) -> i64 {
-        self.total
+impl<Dice: DiceKind> EvaluatedExpression for EvaluatedRollSpec<Dice> {
+    fn total(&self) -> f64 {
+        self.total as f64
     }
 
     fn format_history(&self, markdown: bool, verbose: Verbosity) -> String {
@@ -555,6 +710,76 @@ fn parse_dice_command(s: &str) -> Result<RollSpec<NonZeroU32>> {
 
     let roll_res = parse_dice(expr)?;
     Ok(roll_res)
+}
+
+fn parse_single_command(s: &str) -> Result<Expression> {
+    let expr = {
+        let mut pairs = RollParser::parse(Rule::single_command, &s)?;
+        let expr_type = pairs.next().unwrap();
+        assert_eq!(expr_type.as_rule(), Rule::expr);
+        expr_type.into_inner()
+    };
+
+    let roll_res = parse_expression(expr)?;
+    Ok(roll_res)
+}
+
+fn build_expression<T: ExpressionRollable + 'static>(expression: T) -> Expression {
+    Box::new(expression)
+}
+
+fn parse_expression(mut expr: Pairs<Rule>) -> Result<Expression> {
+    get_climber().climb(
+        expr,
+        |pair: Pair<Rule>| {
+            Ok(match pair.as_rule() {
+                Rule::integer => {
+                    build_expression(pair.as_str().replace(' ', "").parse::<i64>().unwrap())
+                }
+                Rule::float => {
+                    build_expression(pair.as_str().replace(' ', "").parse::<f64>().unwrap())
+                }
+                Rule::block_expr => {
+                    let expr = pair.into_inner().next().unwrap().into_inner();
+                    build_expression(BlockExpression {
+                        inner: parse_expression(expr)?,
+                    })
+                }
+                Rule::dice => {
+                    let expr = pair.into_inner();
+                    build_expression(parse_dice(expr)?)
+                }
+                _ => unreachable!("{:#?}", pair),
+            })
+        },
+        |lhs: Result<Expression>, op: Pair<Rule>, rhs: Result<Expression>| match (lhs, rhs) {
+            (Ok(left), Ok(right)) => match op.as_rule() {
+                Rule::add => Ok(build_expression(BinaryExpression {
+                    left,
+                    op: BinaryOp::Add,
+                    right,
+                })),
+                Rule::sub => Ok(build_expression(BinaryExpression {
+                    left,
+                    op: BinaryOp::Sub,
+                    right,
+                })),
+                Rule::mul => Ok(build_expression(BinaryExpression {
+                    left,
+                    op: BinaryOp::Mul,
+                    right,
+                })),
+                Rule::div => Ok(build_expression(BinaryExpression {
+                    left,
+                    op: BinaryOp::Div,
+                    right,
+                })),
+                _ => unreachable!(),
+            },
+            (Err(e), _) => Err(e),
+            (_, Err(e)) => Err(e),
+        },
+    )
 }
 
 mod parse {
@@ -843,5 +1068,29 @@ mod tests {
         );
 
         assert_eq!(result.total, 4);
+    }
+
+    #[test]
+    fn single_command() {
+        let spec = parse_single_command("1 + 2 * 3 + 1d1 e1").unwrap();
+        let result = spec.roll().unwrap();
+        assert_eq!(
+            result.format_history(true, Verbosity::Medium),
+            "1 + 2 * 3 + [**1**🡵1]e1"
+        );
+
+        assert_eq!(result.total(), 9.0);
+    }
+
+    #[test]
+    fn single_command_blocks() {
+        let spec = parse_single_command("1 + 2 * (3 + 1d1 e1)").unwrap();
+        let result = spec.roll().unwrap();
+        assert_eq!(
+            result.format_history(true, Verbosity::Medium),
+            "1 + 2 * (3 + [**1**🡵1]e1)"
+        );
+
+        assert_eq!(result.total(), 11.0);
     }
 }
