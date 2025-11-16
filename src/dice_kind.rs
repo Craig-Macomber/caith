@@ -1,4 +1,4 @@
-use std::{collections::HashSet, hash::Hash, num::NonZeroU32, rc::Rc};
+use std::{collections::HashSet, fmt::Display, hash::Hash, iter::Chain, num::NonZeroU32};
 
 use crate::{
     parser::{keep_low, DiceRollSource},
@@ -29,7 +29,7 @@ impl DiceKind for NonZeroU32 {
     }
 }
 
-pub trait Roll: Ord + Into<i64> + Copy + Hash {}
+pub trait Roll: Ord + Into<i64> + Copy + Hash + Display {}
 
 /// A [Fudge_dice](https://en.wikipedia.org/wiki/Fudge_%28role-playing_game_system%29#Fudge_dice).
 #[derive(Debug, Ord, Eq, Copy, PartialEq, Clone, PartialOrd)]
@@ -39,6 +39,17 @@ struct Fudge;
 struct FudgeRoll {
     // Always -1, 0 or 1
     value: i8,
+}
+
+impl Display for FudgeRoll {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.value {
+            1 => write!(f, "(+)"),
+            0 => write!(f, "( )"),
+            -1 => write!(f, "(-)"),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl FudgeRoll {
@@ -90,6 +101,69 @@ pub(crate) struct ModifiedRollBatch<TRoll> {
 pub(crate) struct ModifiedRoll<TRoll> {
     before: TRoll,
     modifier: RollModifier<TRoll>,
+}
+
+impl<TRoll: Roll> ModifiedRoll<TRoll> {
+    pub fn format(&self, markdown: bool) -> String {
+        if markdown {
+            match &self.modifier {
+                RollModifier::None => format!("{}", self.before),
+                RollModifier::Drop => format!("~~*{}*~~", self.before),
+                RollModifier::Reroll(items) => {
+                    format!(
+                        "{}{}",
+                        format_join(
+                            self.chain(items.clone()).map(|x| format!("~~*{}*~~🡲", x)),
+                            ""
+                        ),
+                        items.last().unwrap()
+                    )
+                }
+                RollModifier::Explode(items) => {
+                    format!(
+                        "{}{}",
+                        format_join(self.chain(items.clone()).map(|x| format!("**{}**🡵", x)), ""),
+                        items.last().unwrap()
+                    )
+                }
+            }
+        } else {
+            match &self.modifier {
+                RollModifier::None => format!("{}", self.before),
+                RollModifier::Drop => format!("Drop({})", self.before),
+                RollModifier::Reroll(items) => {
+                    format!(
+                        "{}{}",
+                        format_join(
+                            self.chain(items.clone()).map(|x| format!("{}🡲Reroll🡲", x)),
+                            ""
+                        ),
+                        items.last().unwrap()
+                    )
+                }
+                RollModifier::Explode(items) => {
+                    format!(
+                        "{}{}",
+                        format_join(
+                            self.chain(items.clone())
+                                .map(|x| format!("{}(Exploded)🡵", x)),
+                            ""
+                        ),
+                        items.last().unwrap()
+                    )
+                }
+            }
+        }
+    }
+
+    /// Iterate over before then all but the last item in items
+    fn chain(&self, items: Vec<TRoll>) -> impl Iterator<Item = TRoll> {
+        let len = items.len();
+        Some(self.before)
+            .into_iter()
+            .chain(items.into_iter())
+            .take(len)
+    }
 }
 
 impl<TRoll: Copy> ModifiedRoll<TRoll> {
@@ -149,6 +223,37 @@ enum RollModifier<Roll> {
 enum RollBatchModifier<Roll> {
     KeepOrDrop(KeepOrDrop),
     PerRollModifier(PerRollModifier<Roll>),
+}
+
+impl<TRoll: Roll> Display for RollBatchModifier<TRoll> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RollBatchModifier::KeepOrDrop(keep_or_drop) => keep_or_drop.fmt(f),
+            RollBatchModifier::PerRollModifier(per_roll_modifier) => per_roll_modifier.fmt(f),
+        }
+    }
+}
+
+impl Display for KeepOrDrop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KeepOrDrop::KeepHi(u) => write!(f, "K{u}"),
+            KeepOrDrop::KeepLo(u) => write!(f, "k{u}"),
+            KeepOrDrop::DropHi(u) => write!(f, "D{u}"),
+            KeepOrDrop::DropLo(u) => write!(f, "d{u}"),
+        }
+    }
+}
+
+impl<TRoll: Roll> Display for PerRollModifier<TRoll> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PerRollModifier::RerollOnce(r) => write!(f, "r{r}"),
+            PerRollModifier::RerollUnlimited(r) => write!(f, "ir{r}"),
+            PerRollModifier::ExplodeOnce(r) => write!(f, "e{r}"),
+            PerRollModifier::ExplodeUnlimited(r) => write!(f, "ie{r}"),
+        }
+    }
 }
 
 /// A modifier that can be applied to a RollBatch
@@ -291,6 +396,11 @@ impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
     }
 }
 
+trait EvaluatedRoll {
+    fn total(&self) -> i64;
+    fn format_history(&self, markdown: bool, verbose: Verbosity) -> String;
+}
+
 pub struct EvaluatedRollSpec<Dice: DiceKind> {
     total: i64,
     /// All modifications applied to the batch of rolls. Empty of none.
@@ -299,6 +409,63 @@ pub struct EvaluatedRollSpec<Dice: DiceKind> {
     ///
     /// Same as `.after()` for last entry in history (when history is not empty).
     final_rolls: RollBatch<Dice>,
+}
+
+enum Verbosity {
+    Short,
+    Medium,
+    Verbose,
+}
+
+impl<Dice: DiceKind> EvaluatedRoll for EvaluatedRollSpec<Dice> {
+    fn total(&self) -> i64 {
+        self.total
+    }
+
+    fn format_history(&self, markdown: bool, verbose: Verbosity) -> String {
+        if let Some(first) = self.history.first() {
+            if matches!(verbose, Verbosity::Short) {
+                let original = first.1.rolls.iter().map(|m| m.before);
+                format!(
+                    "{} 🡲 {}",
+                    format_rolls(original),
+                    format_rolls(self.final_rolls.rolls.iter())
+                )
+            } else {
+                let mut stages = vec![];
+                for s in &self.history {
+                    let rolls = format_rolls(s.1.rolls.iter().map(|m| m.format(markdown)));
+                    let stage = format!("{}{}", rolls, s.0);
+                    stages.push(stage);
+                }
+
+                if matches!(verbose, Verbosity::Verbose) {
+                    stages.push(format_rolls(self.final_rolls.rolls.iter()));
+                }
+
+                stages.join(" 🡲 ")
+            }
+        } else {
+            format_rolls(self.final_rolls.rolls.iter())
+        }
+    }
+}
+
+fn format_rolls<I: Iterator>(rolls: I) -> String
+where
+    I::Item: Display,
+{
+    format!("[{}]", format_join(rolls, ", "))
+}
+
+fn format_join<I: Iterator>(rolls: I, sep: &str) -> String
+where
+    I::Item: Display,
+{
+    rolls
+        .map(|r| format!("{}", r))
+        .collect::<Vec<_>>()
+        .join(sep)
 }
 
 // number represent nb dice to keep/drop
@@ -411,5 +578,49 @@ mod tests {
             })
             .unwrap();
         assert_eq!(result.total, 7);
+    }
+
+    #[test]
+    fn format() {
+        let spec = RollSpec {
+            dice: D20,
+            number_of_dice: 4,
+            modifiers: vec![
+                RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepHi(2)),
+                RollBatchModifier::PerRollModifier(PerRollModifier::ExplodeOnce(1)),
+                RollBatchModifier::KeepOrDrop(KeepOrDrop::DropLo(1)),
+            ],
+            aggregator: Aggregator::Sum,
+        };
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..11),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format_history(false, Verbosity::Short),
+            "[1, 2, 3, 4] 🡲 [5, 4, 6]"
+        );
+        assert_eq!(
+            result.format_history(true, Verbosity::Short),
+            "[1, 2, 3, 4] 🡲 [5, 4, 6]"
+        );
+        assert_eq!(
+            result.format_history(false, Verbosity::Medium),
+            "[Drop(1), Drop(2), 3, 4]K2 🡲 [3(Exploded)🡵5, 4(Exploded)🡵6]e1 🡲 [Drop(3), 5, 4, 6]d1"
+        );
+        assert_eq!(
+            result.format_history(true, Verbosity::Medium),
+            "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**🡵5, **4**🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1"
+        );
+
+        assert_eq!(
+            result.format_history(false, Verbosity::Verbose),
+            "[Drop(1), Drop(2), 3, 4]K2 🡲 [3(Exploded)🡵5, 4(Exploded)🡵6]e1 🡲 [Drop(3), 5, 4, 6]d1 🡲 [5, 4, 6]"
+        );
+        assert_eq!(
+            result.format_history(true, Verbosity::Verbose),
+            "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**🡵5, **4**🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1 🡲 [5, 4, 6]"
+        );
     }
 }
