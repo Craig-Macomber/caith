@@ -1,3 +1,4 @@
+use core::num;
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
@@ -218,6 +219,165 @@ fn parse_single_command(s: &str) -> Result<Expression> {
     Ok(roll_res)
 }
 
+pub struct Command {
+    expression: Expression,
+    repeat: Option<RepeatedCommand>,
+    reason: Option<String>,
+}
+
+impl Rollable for Command {
+    type Roll = Result<EvaluatedCommand>;
+
+    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
+        let count: usize = self.repeat.as_ref().map(|r| r.count).unwrap_or(1);
+        let expressions: Result<Vec<Box<dyn EvaluatedExpression>>> = (0..count as isize)
+            .map(|_i| self.expression.roll_with_source(rng))
+            .collect();
+        let mut expressions = expressions?;
+
+        let total: Option<f64> = match self.repeat {
+            Some(repeat) => match repeat.mode {
+                RepeatedMode::Sum => Some(expressions.iter().fold(0.0, |x, y| x + y.total())),
+                RepeatedMode::Sort => {
+                    expressions.sort_by(|a, b| f64::total_cmp(&a.total(), &b.total()));
+                    None
+                }
+                RepeatedMode::None => None,
+            },
+            None => Some(expressions.first().unwrap().total()),
+        };
+
+        let repeat: Option<RepeatedCommand> = self.repeat;
+        let reason: Option<String> = self.reason.clone();
+
+        Ok(EvaluatedCommand {
+            total,
+            expressions,
+            repeat,
+            reason,
+        })
+    }
+}
+
+pub struct EvaluatedCommand {
+    total: Option<f64>,
+    expressions: Vec<Box<dyn EvaluatedExpression>>,
+    repeat: Option<RepeatedCommand>,
+    reason: Option<String>,
+}
+
+impl EvaluatedCommand {
+    /// If this command is a single (non-repeated) expression, OR a summed repeated expression, this gives the total.
+    /// Otherwise there is no total, and [None] is returned.
+    pub fn total(&self) -> Option<f64> {
+        self.total
+    }
+
+    /// Pretty print the entire command results, including history and total (if appropriate).
+    pub fn format(&self, markdown: bool, verbose: Verbosity) -> String {
+        let inner: Vec<String> = self
+            .expressions
+            .iter()
+            .map(|x| x.format(markdown, verbose))
+            .collect();
+        let s = match &self.repeat {
+            Some(repeat) => match repeat.mode {
+                RepeatedMode::Sum => format!(
+                    "{} = {}",
+                    inner
+                        .iter()
+                        .map(|s| format!("({s})"))
+                        .collect::<Vec<_>>()
+                        .join(" + "),
+                    self.total.unwrap()
+                ),
+                RepeatedMode::Sort | RepeatedMode::None => inner
+                    .iter()
+                    .map(|s| format!("({s})"))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            },
+            None => inner.first().unwrap().clone(),
+        };
+        match &self.reason {
+            Some(reason) => format!("{s} : {reason}"),
+            None => s,
+        }
+    }
+
+    pub fn results(&self) -> &Vec<Box<dyn EvaluatedExpression>> {
+        &self.expressions
+    }
+}
+
+impl Command {
+    /// Parse a command expression.
+    pub fn parse(s: &str) -> Result<Command> {
+        let mut pairs = RollParser::parse(Rule::command, s)?;
+        let expr_type = pairs.next().unwrap();
+        let mut command = match expr_type.as_rule() {
+            Rule::expr => Command {
+                expression: parse_expression(expr_type.into_inner())?,
+                repeat: None,
+                reason: None,
+            },
+            Rule::repeated_expr => process_repeated_expr(expr_type)?,
+            _ => unreachable!(),
+        };
+
+        if let Some(reason) = pairs.next() {
+            if reason.as_rule() == Rule::reason {
+                command.reason = Some(reason.as_str()[1..].trim().to_owned());
+            }
+        }
+        Ok(command)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RepeatedCommand {
+    count: usize,
+    mode: RepeatedMode,
+}
+
+#[derive(Clone, Copy)]
+enum RepeatedMode {
+    Sum,
+    Sort,
+    None,
+}
+
+fn process_repeated_expr(expr_type: Pair<Rule>) -> Result<Command> {
+    let mut pairs = expr_type.into_inner();
+    let expr = pairs.next().unwrap();
+    let maybe_option = pairs.next().unwrap();
+    let (count, mode) = match maybe_option.as_rule() {
+        Rule::number => (
+            maybe_option.as_str().parse::<usize>().unwrap(),
+            RepeatedMode::None,
+        ),
+        Rule::add => (
+            pairs.next().unwrap().as_str().parse::<usize>().unwrap(),
+            RepeatedMode::Sum,
+        ),
+        Rule::sort => (
+            pairs.next().unwrap().as_str().parse::<usize>().unwrap(),
+            RepeatedMode::Sort,
+        ),
+        _ => unreachable!(),
+    };
+    if count <= 0 {
+        Err("Can't repeat 0 times or negatively".into())
+    } else {
+        let c = parse_expression(expr.clone().into_inner())?;
+        Ok(Command {
+            expression: c,
+            repeat: Some(RepeatedCommand { count, mode }),
+            reason: None,
+        })
+    }
+}
+
 fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
     get_climber().climb(
         expr,
@@ -379,6 +539,59 @@ mod tests {
         assert_eq!(
             result.format(true, Verbosity::Medium),
             "[(-), ( )] + [3] = **2**"
+        );
+    }
+
+    #[test]
+    fn command_single() {
+        let spec = Command::parse("1d6").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..10),
+            })
+            .unwrap();
+        assert_eq!(result.format(false, Verbosity::Medium), "[1] = 1");
+    }
+
+    #[test]
+    fn command_repeated() {
+        let spec = Command::parse("(1d6) ^ 2").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..10),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format(false, Verbosity::Medium),
+            "([1] = 1) ([2] = 2)"
+        );
+    }
+
+    #[test]
+    fn command_repeated_sum() {
+        let spec = Command::parse("(1d6) ^+ 2").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..10),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format(false, Verbosity::Medium),
+            "([1] = 1) + ([2] = 2) = 3"
+        );
+    }
+
+    #[test]
+    fn command_repeated_sort() {
+        let spec = Command::parse("(1d6) ^# 2").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..6).rev(),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format(false, Verbosity::Medium),
+            "([4] = 4) ([5] = 5)"
         );
     }
 }
