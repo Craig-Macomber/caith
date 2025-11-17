@@ -136,8 +136,6 @@
 //! and add four.
 //!
 
-pub mod helpers;
-
 mod dice;
 mod dice_expression;
 
@@ -146,10 +144,6 @@ mod error;
 mod parser;
 
 pub use dice_kind::{Command, EvaluatedCommand, EvaluatedExpression, Expression, Verbosity};
-
-#[cfg(feature = "cards")]
-#[cfg_attr(docsrs, doc(cfg(feature = "cards")))]
-pub mod cards;
 
 pub use error::*;
 
@@ -631,5 +625,60 @@ mod tests {
         });
         let s = format!("{}", res.unwrap().format(false, Verbosity::Medium));
         assert_eq!(s, "[1🡲Reroll🡲2🡲Reroll🡲3🡲Reroll🡲4]ir3 = 4");
+    }
+
+    #[test]
+    fn d0() {
+        let result = Expression::parse("d0").unwrap_err();
+        match result {
+            RollError::ParseError(e) => {
+                assert_eq!(format!("{e}"), "number would be zero for non-zero type")
+            }
+            _ => assert!(false),
+        };
+    }
+
+    #[test]
+    fn fuzz_regression1() {
+        let result = Expression::parse("- 9").unwrap_err();
+        match result {
+            RollError::ParseError(e) => {
+                assert_eq!(format!("{e}"), "invalid digit found in string")
+            }
+            _ => assert!(false),
+        };
+    }
+
+    #[test]
+    fn fuzz_regression2() {
+        let result = Expression::parse("d9d99d9").unwrap().roll().unwrap_err();
+        match result {
+            RollError::ParamError(e) => {
+                assert_eq!(e, "Cannot drop 99 dice when there are only 1")
+            }
+            _ => assert!(false),
+        };
+    }
+
+    #[test]
+    fn fuzz_regression3() {
+        let result = Expression::parse("922222229d979").unwrap_err();
+        match result {
+            RollError::ParamError(e) => {
+                assert_eq!(e, "Too many dice")
+            }
+            _ => assert!(false),
+        };
+    }
+
+    #[test]
+    fn fuzz_regression4() {
+        let result = Expression::parse("99dFt017").unwrap_err();
+        match result {
+            RollError::ParseError(e) => {
+                assert_eq!(format!("{e}"), "number too large to fit in target type")
+            }
+            _ => assert!(false),
+        };
     }
 }

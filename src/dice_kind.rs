@@ -1,7 +1,6 @@
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
-    num::NonZeroU32,
     rc::Rc,
     str::FromStr,
 };
@@ -12,6 +11,7 @@ use pest::{
 };
 
 use crate::{
+    dice::BasicDice,
     dice_expression::parse_dice,
     parser::{get_climber, DiceRollSource, RollParser, Rule},
     Result, Rollable,
@@ -199,8 +199,11 @@ pub trait EvaluatedExpression: Debug {
 /// A verbosity level for formatting output.
 #[derive(Clone, Copy)]
 pub enum Verbosity {
+    /// Skips showing some intermediate steps
     Short,
+    /// Shows every step
     Medium,
+    /// Shows redundant summary information
     Verbose,
 }
 
@@ -259,6 +262,7 @@ impl Rollable for Command {
     }
 }
 
+/// Result of rolling a [Command].
 #[derive(Debug)]
 pub struct EvaluatedCommand {
     total: Option<f64>,
@@ -326,6 +330,7 @@ impl EvaluatedCommand {
         }
     }
 
+    /// Results from each run of the expression
     pub fn results(&self) -> &Vec<Box<dyn EvaluatedExpression>> {
         &self.expressions
     }
@@ -404,12 +409,8 @@ fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
         expr,
         |pair: Pair<Rule>| {
             Ok(match pair.as_rule() {
-                Rule::integer => {
-                    Expression::new(pair.as_str().replace(' ', "").parse::<i64>().unwrap())
-                }
-                Rule::float => {
-                    Expression::new(pair.as_str().replace(' ', "").parse::<f64>().unwrap())
-                }
+                Rule::integer => Expression::new(pair.as_str().replace(' ', "").parse::<i64>()?),
+                Rule::float => Expression::new(pair.as_str().replace(' ', "").parse::<f64>()?),
                 Rule::block_expr => {
                     let expr = pair.into_inner().next().unwrap().into_inner();
                     Expression::new(BlockExpression {
@@ -418,7 +419,7 @@ fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
                 }
                 Rule::dice => {
                     let expr = pair.into_inner();
-                    parse_dice::<NonZeroU32>(expr)?
+                    parse_dice::<BasicDice>(expr)?
                 }
                 _ => unreachable!("{:#?}", pair),
             })
@@ -618,5 +619,15 @@ mod tests {
             }
             _ => assert!(false),
         }
+    }
+
+    #[test]
+    fn fudge_in_expression() {
+        _ = Command::parse("1dF + 1").unwrap().roll().unwrap();
+    }
+
+    #[test]
+    fn fudge_in_expression2() {
+        _ = Command::parse("(1dF + 1dF)").unwrap().roll().unwrap();
     }
 }

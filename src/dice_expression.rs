@@ -3,14 +3,13 @@
 use std::{
     collections::HashSet,
     fmt::{Debug, Display},
-    num::NonZeroU32,
     str::FromStr,
 };
 
 use pest::iterators::{Pair, Pairs};
 
 use crate::{
-    dice::Fudge,
+    dice::{BasicDice, Fudge},
     dice_kind::{
         DiceKind, EvaluatedExpression, ExpressionResult, ExpressionRollable, Roll, Verbosity,
     },
@@ -487,10 +486,20 @@ impl KeepOrDrop {
                 keep_low(&v, *n, |result| std::cmp::Reverse(get_number(&result)))?
             }
             KeepOrDrop::KeepLo(n) => keep_low(&v, *n, |result| get_number(&result))?,
-            KeepOrDrop::DropHi(n) => keep_low(&v, v.len() - n, |result| get_number(&result))?,
-            KeepOrDrop::DropLo(n) => keep_low(&v, v.len() - n, |result| {
-                std::cmp::Reverse(get_number(&result))
-            })?,
+            KeepOrDrop::DropHi(n) => keep_low(
+                &v,
+                v.len().checked_sub(*n).ok_or_else(|| {
+                    format!("Cannot drop {n} dice when there are only {}", v.len())
+                })?,
+                |result| get_number(&result),
+            )?,
+            KeepOrDrop::DropLo(n) => keep_low(
+                &v,
+                v.len().checked_sub(*n).ok_or_else(|| {
+                    format!("Cannot drop {n} dice when there are only {}", v.len())
+                })?,
+                |result| std::cmp::Reverse(get_number(&result)),
+            )?,
         };
         Ok(res)
     }
@@ -501,19 +510,21 @@ pub(crate) fn parse_dice<Dice: DiceKind>(mut dice: Pairs<Rule>) -> Result<Expres
     let number_of_dice = match number_of_dice.as_rule() {
         Rule::number_of_dice => {
             dice.next(); // skip `d` token
-            number_of_dice.as_str().parse::<usize>().unwrap() // TODO: proper error
+            number_of_dice.as_str().parse::<usize>()?
         }
         Rule::roll => 1, // no number before `d`, assume 1 dice
         _ => unreachable!("{:?}", number_of_dice),
     };
 
+    if number_of_dice > 10000 {
+        return Err("Too many dice".into());
+    }
+
     let pair = dice.next().unwrap();
     match pair.as_rule() {
-        Rule::number => parse_dice_inner::<NonZeroU32>(
-            pair.as_str().parse::<NonZeroU32>().unwrap(),
-            number_of_dice,
-            dice,
-        ),
+        Rule::number => {
+            parse_dice_inner::<BasicDice>(pair.as_str().parse::<BasicDice>()?, number_of_dice, dice)
+        }
         Rule::fudge => parse_dice_inner::<Fudge>(Fudge, number_of_dice, dice),
         _ => unreachable!("{:?}", pair),
     }
@@ -593,7 +604,7 @@ where
                 let value_or_enum = option.into_inner().next().unwrap();
                 match value_or_enum.as_rule() {
                     Rule::number => {
-                        let value = value_or_enum.as_str().parse::<Dice::Roll>().unwrap();
+                        let value = value_or_enum.as_str().parse::<Dice::Roll>()?;
                         let (double_target, fail) = match aggregator {
                             Aggregator::TargetFailureDouble(None, f, tt) => (tt, f),
                             Aggregator::Sum => (None, None),
@@ -605,9 +616,9 @@ where
 
                     Rule::target_enum => {
                         let numbers_list = value_or_enum.into_inner();
-                        let numbers_list: Vec<_> = numbers_list
-                            .map(|p| p.as_str().parse::<Dice::Roll>().unwrap())
-                            .collect();
+                        let numbers_list: Vec<Dice::Roll> = numbers_list
+                            .map(|p| p.as_str().parse::<Dice::Roll>())
+                            .collect::<std::result::Result<Vec<Dice::Roll>, <Dice::Roll as FromStr>::Err>>()?;
                         aggregator =
                             Aggregator::TargetEnum(HashSet::from_iter(numbers_list.into_iter()))
                     }
@@ -652,7 +663,7 @@ mod tests {
 
     use super::*;
 
-    const D20: NonZeroU32 = NonZeroU32::new(20).unwrap();
+    const D20: BasicDice = BasicDice::new(20).unwrap();
 
     #[test]
     fn smoke() {

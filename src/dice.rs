@@ -5,7 +5,7 @@
 use std::{
     error::Error,
     fmt::{self, Display},
-    num::{IntErrorKind, NonZeroU32, ParseIntError},
+    num::{IntErrorKind, NonZeroU32, ParseFloatError, ParseIntError},
     str::FromStr,
 };
 
@@ -17,8 +17,11 @@ use crate::{
 
 impl Roll for u32 {}
 
-/// Allow using a NonZeroU32 as a fair dice from 1 to self inclusive.
-impl DiceKind for NonZeroU32 {
+/// This is using an intentionally limited
+pub type BasicDice = NonZeroU32;
+
+/// Allow using a BasicDice as a fair dice from 1 to self inclusive.
+impl DiceKind for BasicDice {
     type Roll = u32;
 
     fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
@@ -90,6 +93,12 @@ impl From<ParseDiceError> for RollError {
 
 impl From<ParseIntError> for RollError {
     fn from(e: ParseIntError) -> Self {
+        RollError::ParseError(Box::new(e))
+    }
+}
+
+impl From<ParseFloatError> for RollError {
+    fn from(e: ParseFloatError) -> Self {
         RollError::ParseError(Box::new(e))
     }
 }

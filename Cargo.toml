@@ -27,8 +27,3 @@ rand = "0.9.1"
 [dev-dependencies]
 rand_core = "0.9.3"
 
-[features]
-default = []
-ova = []
-cde = []
-cards = []
