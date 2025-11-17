@@ -14,10 +14,10 @@
 //! # Usage
 //!
 //! ```
-//! use caith::{Roller, RollResult, RollResultType, Rollable};
+//! use caith::{Command, Rollable};
 //!
 //! // ...
-//! let result = Roller::new("1d6 : initiative").unwrap().roll().unwrap();
+//! let result = Command::parse("1d6 : initiative").unwrap().roll().unwrap();
 //! println!("{}", result);
 //! ```
 //!
@@ -513,170 +513,108 @@ mod tests {
 
     #[test]
     fn one_dice_test() {
-        let r = Roller::new("d20").unwrap();
+        let r = Command::parse("d20").unwrap();
         let roll_mock = vec![8];
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut roll_mock.into_iter(),
             })
             .unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(8, res.get_total());
-        } else {
-            unreachable!();
-        }
+        assert_eq!(8.0, res.total().unwrap());
     }
 
     #[test]
     fn float_mul_test() {
-        let r = Roller::new("20 * 1.5").unwrap();
+        let r = Command::parse("20 * 1.5").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(30, res.get_total());
-        } else {
-            unreachable!()
-        }
+        assert_eq!(30.0, res.total().unwrap());
     }
 
     #[test]
     fn float_signed_mul_test() {
-        let r = Roller::new("20 * +1.5").unwrap();
+        let r = Command::parse("20 * +1.5").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(30, res.get_total());
-        } else {
-            unreachable!()
-        }
+        assert_eq!(30.0, res.total().unwrap());
     }
 
     #[test]
     fn float_neg_signed_mul_test() {
-        let r = Roller::new("20 * -1.5").unwrap();
+        let r = Command::parse("20 * -1.5").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(-30, res.get_total());
-        } else {
-            unreachable!()
-        }
+        assert_eq!(-30.0, res.total().unwrap());
     }
 
     #[test]
     fn float_add_test() {
-        let r = Roller::new("20 + 1.5").unwrap();
+        let r = Command::parse("20 + 1.5").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(21, res.get_total());
-        } else {
-            unreachable!()
-        }
+        assert_eq!(21.5, res.total().unwrap());
     }
 
     #[test]
     fn float_signed_add_test() {
-        let r = Roller::new("20 + +1.5").unwrap();
+        let r = Command::parse("20 + +1.5").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(21, res.get_total());
-        } else {
-            unreachable!()
-        }
+        assert_eq!(21.5, res.total().unwrap());
     }
 
     #[test]
     fn float_neg_signed_add_test() {
-        let r = Roller::new("20 + -1.5").unwrap();
+        let r = Command::parse("20 + -1.5").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(18, res.get_total());
-        } else {
-            unreachable!()
-        }
+        assert_eq!(18.5, res.total().unwrap());
     }
 
     #[test]
     fn signed_add_test() {
-        let r = Roller::new("20 + +5").unwrap();
+        let r = Command::parse("20 + +5").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(25, res.get_total());
-        } else {
-            unreachable!()
-        }
+        assert_eq!(25.0, res.total().unwrap());
     }
 
     #[test]
     fn signed_neg_add_test() {
-        let r = Roller::new("20 + -5").unwrap();
+        let r = Command::parse("20 + -5").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(15, res.get_total());
-        } else {
-            unreachable!()
-        }
+        assert_eq!(15.0, res.total().unwrap());
     }
 
     #[test]
     fn counting_roller_test() {
-        let r = Roller::new("3d6").unwrap();
+        let r = Command::parse("3d6").unwrap();
         let rolls = vec![3, 6, 3];
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut rolls.into_iter(),
             })
             .unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(res.get_total(), 12);
-        } else {
-            assert!(false);
-        }
+        assert_eq!(res.total().unwrap(), 12.0);
     }
 
     #[test]
     fn target_number_test() {
-        let r = Roller::new("10d10 t7").unwrap();
+        let r = Command::parse("10d10 t7").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
             })
             .unwrap();
-        println!("{}", res);
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            // We rolled one of every number, with a target number of 7 we should score a success
-            // on the 7, 8, 9, and 10. So four total.
-            assert_eq!(res.get_total(), 4);
-        } else {
-            assert!(false);
-        }
+        // We rolled one of every number, with a target number of 7 we should score a success
+        // on the 7, 8, 9, and 10. So four total.
+        assert_eq!(res.total().unwrap(), 4.0);
     }
 
     #[test]
     fn target_number_double_test() {
-        let r = Roller::new("10d10 t7 tt9").unwrap();
+        let r = Command::parse("10d10 t7 tt9").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
             })
             .unwrap();
-        println!("{}", res);
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            // We rolled one of every number. That's a success each for the 7 and 8, and two
-            // success each for the 9 and 10. So a total of six.
-            assert_eq!(res.get_total(), 6);
-        } else {
-            assert!(false);
-        }
+        // We rolled one of every number. That's a success each for the 7 and 8, and two
+        // success each for the 9 and 10. So a total of six.
+        assert_eq!(res.total().unwrap(), 6.0);
     }
 
     // Where a user has asked for a doubles threshold that is lower than the single threshold,
@@ -710,54 +648,54 @@ mod tests {
 
     #[test]
     fn target_order_of_results() {
-        let r = Roller::new("2d10").unwrap();
+        let r = Command::parse("2d10").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
             })
             .unwrap();
-        let s = format!("{}", res.as_single().unwrap().to_string(false));
+        let s = format!("{}", res.format(false, Verbosity::Medium));
         assert_eq!(s, "[1, 2] = 3")
     }
 
     #[test]
     fn keep_highest() {
-        let r = Roller::new("2d10K1").unwrap();
+        let r = Command::parse("2d10K1").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
             })
             .unwrap();
-        let s = format!("{}", res.as_single().unwrap().to_string(false));
-        assert_eq!(s, "[[1], 2] -> [2] = 2");
+        let s = format!("{}", res.format(false, Verbosity::Medium));
+        assert_eq!(s, "[Drop(1), 2]K1 = 2");
 
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11).rev(),
             })
             .unwrap();
-        let s = format!("{}", res.as_single().unwrap().to_string(false));
-        assert_eq!(s, "[10, [9]] -> [10] = 10");
+        let s = format!("{}", res.format(false, Verbosity::Medium));
+        assert_eq!(s, "[10, Drop(9)]K1 = 10");
     }
 
     #[test]
     fn keep_lowest() {
-        let r = Roller::new("2d10k1").unwrap();
+        let r = Command::parse("2d10k1").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
             })
             .unwrap();
-        let s = format!("{}", res.as_single().unwrap().to_string(false));
-        assert_eq!(s, "[1, [2]] -> [1] = 1");
+        let s = format!("{}", res.format(false, Verbosity::Medium));
+        assert_eq!(s, "[1, Drop(2)]k1 = 1");
 
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11).rev(),
             })
             .unwrap();
-        let s = format!("{}", res.as_single().unwrap().to_string(false));
-        assert_eq!(s, "[[10], 9] -> [9] = 9");
+        let s = format!("{}", res.format(false, Verbosity::Medium));
+        assert_eq!(s, "[Drop(10), 9]k1 = 9");
     }
 
     #[test]
@@ -798,20 +736,15 @@ mod tests {
 
     #[test]
     fn target_enum() {
-        let r = Roller::new("6d6 t[2,4,6]").unwrap();
+        let r = Command::parse("6d6 t[2,4,6]").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..7),
             })
             .unwrap();
-        println!("{}", res);
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            // We rolled one of every number. That's half of them being even
-            assert_eq!(res.get_total(), 3);
-        } else {
-            assert!(false);
-        }
+
+        // We rolled one of every number. That's half of them being even
+        assert_eq!(res.total().unwrap(), 3.0);
 
         let mock = vec![1, 2, 2, 4, 6, 3];
         let res = r
@@ -819,14 +752,8 @@ mod tests {
                 iterator: &mut mock.into_iter(),
             })
             .unwrap();
-        println!("{}", res);
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            // We rolled one of every number. That's half of them being even
-            assert_eq!(res.get_total(), 4);
-        } else {
-            assert!(false);
-        }
+        // We rolled one of every number. That's half of them being even
+        assert_eq!(res.total().unwrap(), 4.0);
 
         let mock = vec![1, 3, 3, 4, 6, 3];
         let res = r
@@ -834,37 +761,25 @@ mod tests {
                 iterator: &mut mock.into_iter(),
             })
             .unwrap();
-        println!("{}", res);
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            // We rolled one of every number. That's half of them being even
-            assert_eq!(res.get_total(), 2);
-        } else {
-            assert!(false);
-        }
+        // We rolled one of every number. That's half of them being even
+        assert_eq!(res.total().unwrap(), 2.0);
     }
 
     #[test]
     fn sandbox_test() {
-        let r = Roller::new("5d6 + 4 * 2").unwrap();
-        r.dices()
-            .expect("Error while parsing")
-            .for_each(|d| eprintln!("{}", d));
-
-        eprintln!("{}\n{}", r.as_str(), r.roll().unwrap());
+        Command::parse("5d6 + 4 * 2").unwrap().roll().unwrap();
     }
 
     #[test]
     fn caith_minimal() {
         // This should deterministically roll a 1
-        let roller = Roller::new(&"1d1").unwrap();
+        let roller = Expression::parse(&"1d1").unwrap();
 
         let result = roller.roll().unwrap();
-        let numeric = result.as_single().unwrap();
-        let history = numeric.to_string_history();
-        let as_string = numeric.to_string(false);
+        let history = result.format_history(false, Verbosity::Medium);
+        let as_string = result.format(false, Verbosity::Medium);
 
-        assert_eq!(numeric.get_total(), 1);
+        assert_eq!(result.total(), 1.0);
         assert_eq!(as_string, "[1] = 1");
         assert_eq!(history, "[1]");
     }
@@ -872,17 +787,16 @@ mod tests {
     #[test]
     fn reroll() {
         // This should deterministically roll a 1, then reroll 1
-        let roller = Roller::new("1d1 r1").unwrap();
+        let roller = Expression::parse("1d1 r1").unwrap();
 
         let result = roller.roll().unwrap();
-        let numeric = result.as_single().unwrap();
-        let history = numeric.to_string_history();
-        let as_string = numeric.to_string(false);
+        let history = result.format_history(false, Verbosity::Medium);
+        let as_string = result.format(false, Verbosity::Medium);
 
-        assert_eq!(numeric.get_total(), 1);
-        assert_eq!(as_string, "[1 -> 1] -> [1] = 1");
+        assert_eq!(result.total(), 1.0);
+        assert_eq!(as_string, "[1🡲Reroll🡲1]r1 = 1");
         // Rerolls are now displayed in the history
-        assert_eq!(history, "[1 -> 1] -> [1]");
+        assert_eq!(history, "[1🡲Reroll🡲1]r1");
     }
 
     #[test]

@@ -259,6 +259,7 @@ impl Rollable for Command {
     }
 }
 
+#[derive(Debug)]
 pub struct EvaluatedCommand {
     total: Option<f64>,
     expressions: Vec<Box<dyn EvaluatedExpression>>,
@@ -271,6 +272,18 @@ fn format_bold<V: Display>(value: V, markdown: bool) -> String {
         format!("**{value}**")
     } else {
         format!("{value}")
+    }
+}
+
+impl Display for EvaluatedCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.format(false, Verbosity::Medium))
+    }
+}
+
+impl Display for dyn EvaluatedExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.format(false, Verbosity::Medium))
     }
 }
 
