@@ -11,99 +11,30 @@ use crate::{
 };
 
 /// A kind of dice which can be rolled.
-pub trait DiceKind: Copy {
+pub(crate) trait DiceKind: Copy {
     type Roll: Roll;
     fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll;
     fn max(&self) -> Self::Roll;
     fn min(&self) -> Self::Roll;
 }
 
-/// Allow using a NonZeroU32 as a fair dice from 1 to self inclusive.
-impl DiceKind for NonZeroU32 {
-    type Roll = u32;
-
-    fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
-        let value = rng.roll_single_die(self.get().into());
-        <u64 as TryInto<u32>>::try_into(value).unwrap()
-    }
-    fn max(&self) -> Self::Roll {
-        (*self).into()
-    }
-    fn min(&self) -> Self::Roll {
-        1
-    }
-}
-
-pub trait Roll: Ord + Into<i64> + Copy + Hash + Display {}
-
-/// A [Fudge_dice](https://en.wikipedia.org/wiki/Fudge_%28role-playing_game_system%29#Fudge_dice).
-#[derive(Debug, Ord, Eq, Copy, PartialEq, Clone, PartialOrd)]
-struct Fudge;
-
-#[derive(Debug, Ord, Eq, Copy, PartialEq, Clone, PartialOrd, Hash)]
-struct FudgeRoll {
-    // Always -1, 0 or 1
-    value: i8,
-}
-
-impl Display for FudgeRoll {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.value {
-            1 => write!(f, "(+)"),
-            0 => write!(f, "( )"),
-            -1 => write!(f, "(-)"),
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl FudgeRoll {
-    pub fn new(rng: &mut dyn DiceRollSource) -> Self {
-        let value = rng.roll_single_die(3);
-        FudgeRoll {
-            value: <u64 as TryInto<i8>>::try_into(value).unwrap() - 2,
-        }
-    }
-}
-
-impl Into<i64> for FudgeRoll {
-    fn into(self) -> i64 {
-        self.value.into()
-    }
-}
-impl Roll for FudgeRoll {}
-
-impl Roll for u32 {}
-
-impl DiceKind for Fudge {
-    type Roll = FudgeRoll;
-
-    fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
-        FudgeRoll::new(rng)
-    }
-    fn max(&self) -> Self::Roll {
-        FudgeRoll { value: 1 }
-    }
-    fn min(&self) -> Self::Roll {
-        FudgeRoll { value: -1 }
-    }
-}
+pub(crate) trait Roll: Ord + Into<i64> + Copy + Hash + Display {}
 
 /// A batch of rolls of the same kind of dice.
 #[derive(Debug, Clone)]
-pub(crate) struct RollBatch<Dice: DiceKind + Clone> {
+struct RollBatch<Dice: DiceKind + Clone> {
     pub dice: Dice,
     pub rolls: Vec<Dice::Roll>,
 }
 
 /// A batch of rolls of the same kind of dice.
 #[derive(Debug, Clone)]
-pub(crate) struct ModifiedRollBatch<TRoll> {
+struct ModifiedRollBatch<TRoll> {
     pub rolls: Vec<ModifiedRoll<TRoll>>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ModifiedRoll<TRoll> {
+struct ModifiedRoll<TRoll> {
     before: TRoll,
     modifier: RollModifier<TRoll>,
 }
@@ -366,17 +297,17 @@ impl<Dice: DiceKind + Clone> RollBatch<Dice> {
 }
 
 /// Specification for a single batch of dice to roll and process.
-pub struct RollSpec<Dice: DiceKind> {
+struct RollSpec<Dice: DiceKind> {
     dice: Dice,
     number_of_dice: usize,
     modifiers: Vec<RollBatchModifier<Dice::Roll>>,
     aggregator: Aggregator<Dice::Roll>,
 }
 
-type Expression = Box<dyn ExpressionRollable>;
-type ExpressionResult = Result<Box<dyn EvaluatedExpression>>;
+pub type Expression = Box<dyn ExpressionRollable>;
+pub type ExpressionResult = Result<Box<dyn EvaluatedExpression>>;
 
-trait ExpressionRollable {
+pub trait ExpressionRollable {
     /// Evaluate and roll the dice with provided dice roll source
     fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult;
 }
@@ -468,7 +399,7 @@ impl EvaluatedExpression for BinaryExpression<Box<dyn EvaluatedExpression>> {
 }
 
 impl ExpressionRollable for f64 {
-    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
+    fn expression_roll(&self, _rng: &mut dyn DiceRollSource) -> ExpressionResult {
         Ok(Box::new(*self))
     }
 }
@@ -478,13 +409,13 @@ impl EvaluatedExpression for f64 {
         *self
     }
 
-    fn format_history(&self, markdown: bool, verbose: Verbosity) -> String {
+    fn format_history(&self, _markdown: bool, _verbose: Verbosity) -> String {
         format!("{self}")
     }
 }
 
 impl ExpressionRollable for i64 {
-    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
+    fn expression_roll(&self, _rng: &mut dyn DiceRollSource) -> ExpressionResult {
         Ok(Box::new(*self))
     }
 }
@@ -494,7 +425,7 @@ impl EvaluatedExpression for i64 {
         *self as f64
     }
 
-    fn format_history(&self, markdown: bool, verbose: Verbosity) -> String {
+    fn format_history(&self, _markdown: bool, _verbose: Verbosity) -> String {
         format!("{self}")
     }
 }
@@ -555,7 +486,7 @@ impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
     }
 }
 
-trait EvaluatedExpression {
+pub trait EvaluatedExpression {
     fn total(&self) -> f64;
     fn format_history(&self, markdown: bool, verbose: Verbosity) -> String;
 
@@ -570,7 +501,7 @@ trait EvaluatedExpression {
     }
 }
 
-pub struct EvaluatedRollSpec<Dice: DiceKind> {
+struct EvaluatedRollSpec<Dice: DiceKind> {
     total: i64,
     /// All modifications applied to the batch of rolls. Empty of none.
     history: Vec<(RollBatchModifier<Dice::Roll>, ModifiedRollBatch<Dice::Roll>)>,
@@ -581,7 +512,7 @@ pub struct EvaluatedRollSpec<Dice: DiceKind> {
 }
 
 #[derive(Clone, Copy)]
-enum Verbosity {
+pub enum Verbosity {
     Short,
     Medium,
     Verbose,
@@ -710,19 +641,8 @@ impl KeepOrDrop {
     }
 }
 
-fn parse_dice_command(s: &str) -> Result<RollSpec<NonZeroU32>> {
-    let expr = {
-        let mut pairs = RollParser::parse(Rule::dice_command, &s)?;
-        let expr_type = pairs.next().unwrap();
-        assert_eq!(expr_type.as_rule(), Rule::dice);
-        expr_type.into_inner()
-    };
-
-    let roll_res = parse_dice(expr)?;
-    Ok(roll_res)
-}
-
-fn parse_single_command(s: &str) -> Result<Expression> {
+/// Parse a single (non-repeated) dice expression.
+pub fn parse_single_command(s: &str) -> Result<Expression> {
     let expr = {
         let mut pairs = RollParser::parse(Rule::single_command, &s)?;
         let expr_type = pairs.next().unwrap();
@@ -738,7 +658,7 @@ fn build_expression<T: ExpressionRollable + 'static>(expression: T) -> Expressio
     Box::new(expression)
 }
 
-fn parse_expression(mut expr: Pairs<Rule>) -> Result<Expression> {
+fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
     get_climber().climb(
         expr,
         |pair: Pair<Rule>| {
@@ -790,36 +710,6 @@ fn parse_expression(mut expr: Pairs<Rule>) -> Result<Expression> {
             (_, Err(e)) => Err(e),
         },
     )
-}
-
-mod parse {
-    use pest::Parser;
-    use pest_derive::Parser;
-
-    #[derive(Parser)]
-    #[grammar = "caith.pest"]
-    struct CaithParser;
-
-    // fn main(s: &str) -> Result<RollSpec<NonZeroU32>> {
-    //     let pairs = CaithParser::parse(Rule::dice_command, "a1 b2")?;
-
-    //     // Because ident_list is silent, the iterator will contain idents
-    //     for pair in pairs {
-    //         // A pair is a combination of the rule which matched and a span of input
-    //         println!("Rule:    {:?}", pair.as_rule());
-    //         println!("Span:    {:?}", pair.as_span());
-    //         println!("Text:    {}", pair.as_str());
-
-    //         // A pair can be converted to an iterator of the tokens which make it up:
-    //         for inner_pair in pair.into_inner() {
-    //             match inner_pair.as_rule() {
-    //                 Rule::alpha => println!("Letter:  {}", inner_pair.as_str()),
-    //                 Rule::digit => println!("Digit:   {}", inner_pair.as_str()),
-    //                 _ => unreachable!(),
-    //             };
-    //         }
-    //     }
-    // }
 }
 
 fn extract_option_value(option: Pair<Rule>) -> Option<u32> {
@@ -962,8 +852,6 @@ fn parse_dice(mut dice: Pairs<Rule>) -> Result<RollSpec<NonZeroU32>> {
     })
 }
 
-///
-
 #[cfg(test)]
 mod tests {
     use crate::tests::IteratorDiceRollSource;
@@ -1050,7 +938,7 @@ mod tests {
 
     #[test]
     fn dice_command_sum() {
-        let spec = parse_dice_command("2d20 e2").unwrap();
+        let spec = parse_single_command("2d20 e2").unwrap();
         let result = spec
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..21).chain(Some(20)),
@@ -1061,12 +949,12 @@ mod tests {
             "[1, **2**🡵3]e2"
         );
 
-        assert_eq!(result.total, 6);
+        assert_eq!(result.total(), 6.0);
     }
 
     #[test]
     fn dice_command_check() {
-        let spec = parse_dice_command("20d20 e tt20").unwrap();
+        let spec = parse_single_command("20d20 e tt20").unwrap();
         let result = spec
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..21).chain(Some(20)),
@@ -1077,7 +965,7 @@ mod tests {
             "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, **20**🡵20]e20"
         );
 
-        assert_eq!(result.total, 4);
+        assert_eq!(result.total(), 4.0);
     }
 
     #[test]

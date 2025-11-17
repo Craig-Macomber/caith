@@ -143,10 +143,13 @@ use pest::{
 
 pub mod helpers;
 
-pub mod dice_kind;
+mod dice;
+mod dice_kind;
 mod error;
 mod parser;
 mod rollresult;
+
+pub use dice_kind::parse_single_command;
 
 #[cfg(feature = "cards")]
 #[cfg_attr(docsrs, doc(cfg(feature = "cards")))]
