@@ -1,4 +1,3 @@
-use core::num;
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
@@ -201,6 +200,7 @@ pub trait EvaluatedExpression: Debug {
     }
 }
 
+/// A verbosity level for formatting output.
 #[derive(Clone, Copy)]
 pub enum Verbosity {
     Short,
@@ -221,6 +221,8 @@ fn parse_single_command(s: &str) -> Result<Expression> {
     Ok(roll_res)
 }
 
+/// A parsed command.
+#[derive(Debug)]
 pub struct Command {
     expression: Expression,
     repeat: Option<RepeatedCommand>,
@@ -336,13 +338,13 @@ impl Command {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct RepeatedCommand {
     count: usize,
     mode: RepeatedMode,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum RepeatedMode {
     Sum,
     Sort,
@@ -434,17 +436,10 @@ fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
     )
 }
 
-pub(crate) fn extract_option_value<T: FromStr<Err: Debug>>(option: Pair<Rule>) -> Option<T> {
-    option
-        .into_inner()
-        .next()
-        .map(|p| p.as_str().parse::<T>().unwrap())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::IteratorDiceRollSource;
+    use crate::{tests::IteratorDiceRollSource, RollError};
 
     #[test]
     fn dice_command_sum() {
@@ -595,5 +590,16 @@ mod tests {
             result.format(false, Verbosity::Medium),
             "([4] = 4) ([5] = 5)"
         );
+    }
+
+    #[test]
+    fn invalid_reroll_fudge() {
+        let spec = Command::parse("1dF ir6").unwrap_err();
+        match spec {
+            RollError::ParseError(e) => {
+                assert_eq!(format!("{e}"), "number too large to fit in target type")
+            }
+            _ => assert!(false),
+        }
     }
 }

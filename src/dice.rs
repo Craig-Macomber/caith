@@ -12,6 +12,7 @@ use std::{
 use crate::{
     dice_kind::{DiceKind, Roll},
     parser::DiceRollSource,
+    RollError,
 };
 
 impl Roll for u32 {}
@@ -78,6 +79,18 @@ impl From<ParseIntError> for ParseDiceError {
         ParseDiceError {
             kind: *value.kind(),
         }
+    }
+}
+
+impl From<ParseDiceError> for RollError {
+    fn from(value: ParseDiceError) -> Self {
+        RollError::ParseError(Box::new(value))
+    }
+}
+
+impl From<ParseIntError> for RollError {
+    fn from(e: ParseIntError) -> Self {
+        RollError::ParseError(Box::new(e))
     }
 }
 

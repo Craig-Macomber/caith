@@ -1,4 +1,5 @@
-use std::{error::Error, fmt::Display};
+use std::fmt::Debug;
+use std::{error::Error, fmt::Display, num::ParseIntError};
 
 use crate::parser::*;
 
@@ -9,7 +10,7 @@ pub type Result<T> = std::result::Result<T, RollError>;
 #[derive(Debug)]
 pub enum RollError {
     /// Error while parsing the expression, emitted by `pest`
-    ParseError(Box<pest::error::Error<Rule>>),
+    ParseError(Box<dyn Error>),
     /// Any other error while walking the AST, the String contains an explanation of what happened
     ParamError(String),
 }

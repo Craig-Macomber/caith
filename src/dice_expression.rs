@@ -4,15 +4,15 @@ use std::{
     collections::HashSet,
     fmt::{Debug, Display},
     num::NonZeroU32,
+    str::FromStr,
 };
 
-use pest::iterators::Pairs;
+use pest::iterators::{Pair, Pairs};
 
 use crate::{
     dice::Fudge,
     dice_kind::{
-        extract_option_value, DiceKind, EvaluatedExpression, ExpressionResult, ExpressionRollable,
-        Roll, Verbosity,
+        DiceKind, EvaluatedExpression, ExpressionResult, ExpressionRollable, Roll, Verbosity,
     },
     parser::{keep_low, DiceRollSource, Rule},
     Expression, Result, RollError, Rollable,
@@ -519,11 +519,25 @@ pub(crate) fn parse_dice<Dice: DiceKind>(mut dice: Pairs<Rule>) -> Result<Expres
     }
 }
 
+fn extract_option_value<T: FromStr<Err: Debug>>(option: Pair<Rule>) -> Result<Option<T>>
+where
+    RollError: From<T::Err>,
+{
+    let x = match option.into_inner().next() {
+        Some(p) => Some(p.as_str().parse::<T>()?),
+        None => None,
+    };
+    Ok(x)
+}
+
 pub(crate) fn parse_dice_inner<Dice: DiceKind>(
     dice_parsed: Dice,
     number_of_dice: usize,
     mut dice: Pairs<Rule>,
-) -> Result<Expression> {
+) -> Result<Expression>
+where
+    RollError: From<<Dice::Roll as FromStr>::Err>,
+{
     let sides = dice_parsed.max();
 
     let mut modifiers: Vec<RollBatchModifier<Dice::Roll>> = vec![];
@@ -536,43 +550,43 @@ pub(crate) fn parse_dice_inner<Dice: DiceKind>(
 
         match &option.as_rule() {
             Rule::explode => {
-                let value = extract_option_value(option).unwrap_or(sides);
+                let value = extract_option_value(option)?.unwrap_or(sides);
                 modifiers.push(RollBatchModifier::PerRollModifier(
                     PerRollModifier::ExplodeOnce(value),
                 ));
             }
             Rule::i_explode => {
-                let value = extract_option_value(option).unwrap_or(sides);
+                let value = extract_option_value(option)?.unwrap_or(sides);
                 modifiers.push(RollBatchModifier::PerRollModifier(
                     PerRollModifier::ExplodeUnlimited(value),
                 ));
             }
             Rule::reroll => {
-                let value = extract_option_value(option).unwrap();
+                let value = extract_option_value(option)?.unwrap();
                 modifiers.push(RollBatchModifier::PerRollModifier(
                     PerRollModifier::RerollOnce(value),
                 ));
             }
             Rule::i_reroll => {
-                let value = extract_option_value(option).unwrap();
+                let value = extract_option_value(option)?.unwrap();
                 modifiers.push(RollBatchModifier::PerRollModifier(
                     PerRollModifier::RerollUnlimited(value),
                 ));
             }
             Rule::keep_hi => {
-                let value = extract_option_value(option).unwrap();
+                let value = extract_option_value::<usize>(option)?.unwrap();
                 modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepHi(value)));
             }
             Rule::keep_lo => {
-                let value = extract_option_value(option).unwrap();
+                let value = extract_option_value::<usize>(option)?.unwrap();
                 modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepLo(value)));
             }
             Rule::drop_hi => {
-                let value = extract_option_value(option).unwrap();
+                let value = extract_option_value::<usize>(option)?.unwrap();
                 modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::DropHi(value)));
             }
             Rule::drop_lo => {
-                let value = extract_option_value(option).unwrap();
+                let value = extract_option_value::<usize>(option)?.unwrap();
                 modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::DropLo(value)));
             }
             Rule::target => {
@@ -601,7 +615,7 @@ pub(crate) fn parse_dice_inner<Dice: DiceKind>(
                 };
             }
             Rule::double_target => {
-                let value = extract_option_value(option).unwrap();
+                let value = extract_option_value(option)?.unwrap();
                 let (target, fail) = match aggregator {
                     Aggregator::TargetFailureDouble(t, f, None) => (t, f),
                     Aggregator::Sum => (None, None),
@@ -610,7 +624,7 @@ pub(crate) fn parse_dice_inner<Dice: DiceKind>(
                 aggregator = Aggregator::TargetFailureDouble(target, fail, Some(value))
             }
             Rule::failure => {
-                let value = extract_option_value(option).unwrap();
+                let value = extract_option_value(option)?.unwrap();
                 let (target, double_target) = match aggregator {
                     Aggregator::TargetFailureDouble(t, None, d) => (t, d),
                     Aggregator::Sum => (None, None),
