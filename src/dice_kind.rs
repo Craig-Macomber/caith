@@ -558,6 +558,16 @@ impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
 trait EvaluatedExpression {
     fn total(&self) -> f64;
     fn format_history(&self, markdown: bool, verbose: Verbosity) -> String;
+
+    fn format(&self, markdown: bool, verbose: Verbosity) -> String {
+        let history = self.format_history(markdown, verbose);
+        let total = self.total();
+        if markdown {
+            format!("{history} = **{total}**")
+        } else {
+            format!("{history} = {total}",)
+        }
+    }
 }
 
 pub struct EvaluatedRollSpec<Dice: DiceKind> {
@@ -1087,8 +1097,8 @@ mod tests {
         let spec = parse_single_command("1 + 2 * (3 + 1d1 e1)").unwrap();
         let result = spec.roll().unwrap();
         assert_eq!(
-            result.format_history(true, Verbosity::Medium),
-            "1 + 2 * (3 + [**1**🡵1]e1)"
+            result.format(true, Verbosity::Medium),
+            "1 + 2 * (3 + [**1**🡵1]e1) = **11**"
         );
 
         assert_eq!(result.total(), 11.0);
