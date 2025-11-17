@@ -149,7 +149,7 @@ mod error;
 mod parser;
 mod rollresult;
 
-pub use dice_kind::parse_single_command;
+pub use dice_kind::Expression;
 
 #[cfg(feature = "cards")]
 #[cfg_attr(docsrs, doc(cfg(feature = "cards")))]

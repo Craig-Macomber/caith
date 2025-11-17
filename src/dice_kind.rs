@@ -141,7 +141,7 @@ impl<TRoll: Roll> ModifiedRollBatch<TRoll> {
     }
 }
 
-/// See ModifiedRoll.after for how to apply this to a roll.
+/// See [ModifiedRoll::after] for how to apply this to a roll.
 #[derive(Debug, Clone)]
 enum RollModifier<Roll> {
     // keep original
@@ -304,27 +304,33 @@ struct RollSpec<Dice: DiceKind> {
     aggregator: Aggregator<Dice::Roll>,
 }
 
-pub type Expression = Box<dyn ExpressionRollable>;
+/// A parsed dice expression.
+pub struct Expression(Box<dyn ExpressionRollable>);
+
 pub type ExpressionResult = Result<Box<dyn EvaluatedExpression>>;
 
-pub trait ExpressionRollable {
+trait ExpressionRollable {
     /// Evaluate and roll the dice with provided dice roll source
     fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult;
-}
-
-impl Rollable for dyn ExpressionRollable {
-    type Roll = ExpressionResult;
-
-    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
-        ExpressionRollable::expression_roll(self, rng)
-    }
 }
 
 impl Rollable for Expression {
     type Roll = ExpressionResult;
 
     fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Self::Roll {
-        ExpressionRollable::expression_roll(&**self, rng)
+        let inner: &dyn ExpressionRollable = &*self.0;
+        ExpressionRollable::expression_roll(inner, rng)
+    }
+}
+
+impl Expression {
+    /// Parse as string into an [Expression].
+    pub fn parse(expression: &str) -> Result<Expression> {
+        parse_single_command(expression)
+    }
+
+    fn new<T: ExpressionRollable + 'static>(expression: T) -> Expression {
+        Expression(Box::new(expression))
     }
 }
 
@@ -375,8 +381,8 @@ struct BinaryExpression<T> {
 
 impl ExpressionRollable for BinaryExpression<Expression> {
     fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
-        let left = self.left.expression_roll(rng)?;
-        let right = self.right.expression_roll(rng)?;
+        let left = self.left.roll_with_source(rng)?;
+        let right = self.right.roll_with_source(rng)?;
         Ok(Box::new(BinaryExpression {
             left,
             op: self.op,
@@ -437,7 +443,7 @@ struct BlockExpression<T> {
 impl ExpressionRollable for BlockExpression<Expression> {
     fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
         Ok(Box::new(BlockExpression {
-            inner: self.inner.expression_roll(rng)?,
+            inner: self.inner.roll_with_source(rng)?,
         }))
     }
 }
@@ -642,7 +648,7 @@ impl KeepOrDrop {
 }
 
 /// Parse a single (non-repeated) dice expression.
-pub fn parse_single_command(s: &str) -> Result<Expression> {
+fn parse_single_command(s: &str) -> Result<Expression> {
     let expr = {
         let mut pairs = RollParser::parse(Rule::single_command, &s)?;
         let expr_type = pairs.next().unwrap();
@@ -654,58 +660,54 @@ pub fn parse_single_command(s: &str) -> Result<Expression> {
     Ok(roll_res)
 }
 
-fn build_expression<T: ExpressionRollable + 'static>(expression: T) -> Expression {
-    Box::new(expression)
-}
-
 fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
     get_climber().climb(
         expr,
         |pair: Pair<Rule>| {
             Ok(match pair.as_rule() {
                 Rule::integer => {
-                    build_expression(pair.as_str().replace(' ', "").parse::<i64>().unwrap())
+                    Expression::new(pair.as_str().replace(' ', "").parse::<i64>().unwrap())
                 }
                 Rule::float => {
-                    build_expression(pair.as_str().replace(' ', "").parse::<f64>().unwrap())
+                    Expression::new(pair.as_str().replace(' ', "").parse::<f64>().unwrap())
                 }
                 Rule::block_expr => {
                     let expr = pair.into_inner().next().unwrap().into_inner();
-                    build_expression(BlockExpression {
+                    Expression::new(BlockExpression {
                         inner: parse_expression(expr)?,
                     })
                 }
                 Rule::dice => {
                     let expr = pair.into_inner();
-                    build_expression(parse_dice(expr)?)
+                    Expression::new(parse_dice(expr)?)
                 }
                 _ => unreachable!("{:#?}", pair),
             })
         },
         |lhs: Result<Expression>, op: Pair<Rule>, rhs: Result<Expression>| match (lhs, rhs) {
-            (Ok(left), Ok(right)) => match op.as_rule() {
-                Rule::add => Ok(build_expression(BinaryExpression {
+            (Ok(left), Ok(right)) => Ok(match op.as_rule() {
+                Rule::add => Expression::new(BinaryExpression {
                     left,
                     op: BinaryOp::Add,
                     right,
-                })),
-                Rule::sub => Ok(build_expression(BinaryExpression {
+                }),
+                Rule::sub => Expression::new(BinaryExpression {
                     left,
                     op: BinaryOp::Sub,
                     right,
-                })),
-                Rule::mul => Ok(build_expression(BinaryExpression {
+                }),
+                Rule::mul => Expression::new(BinaryExpression {
                     left,
                     op: BinaryOp::Mul,
                     right,
-                })),
-                Rule::div => Ok(build_expression(BinaryExpression {
+                }),
+                Rule::div => Expression::new(BinaryExpression {
                     left,
                     op: BinaryOp::Div,
                     right,
-                })),
+                }),
                 _ => unreachable!(),
-            },
+            }),
             (Err(e), _) => Err(e),
             (_, Err(e)) => Err(e),
         },
@@ -982,7 +984,7 @@ mod tests {
 
     #[test]
     fn single_command_blocks() {
-        let spec = parse_single_command("1 + 2 * (3 + 1d1 e1)").unwrap();
+        let spec = Expression::parse("1 + 2 * (3 + 1d1 e1)").unwrap();
         let result = spec.roll().unwrap();
         assert_eq!(
             result.format(true, Verbosity::Medium),
