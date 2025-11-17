@@ -136,11 +136,6 @@
 //! and add four.
 //!
 
-use pest::{
-    iterators::{Pair, Pairs},
-    Parser,
-};
-
 pub mod helpers;
 
 mod dice;
@@ -149,7 +144,6 @@ mod dice_expression;
 mod dice_kind;
 mod error;
 mod parser;
-mod rollresult;
 
 pub use dice_kind::{Command, EvaluatedCommand, EvaluatedExpression, Expression, Verbosity};
 
@@ -158,24 +152,9 @@ pub use dice_kind::{Command, EvaluatedCommand, EvaluatedExpression, Expression, 
 pub mod cards;
 
 pub use error::*;
-pub use rollresult::*;
 
-use parser::{DiceRollSource, RollParser, Rule};
+use parser::DiceRollSource;
 use rand::Rng;
-
-const REASON_CHAR: char = ':';
-
-/// An object holding the query.
-///
-/// It has no advantage compare to free function that would take `&str` as parameter (like previous
-/// version) but it provides a stable API for the day `pest` can have a `Send` type as the parse
-/// result.
-///
-/// see [Pest's issue](https://github.com/pest-parser/pest/issues/472)
-/// and [Forum topic](https://users.rust-lang.org/t/how-to-deal-with-external-type-which-is-send-and-sync/47530)
-///
-#[derive(Clone, Debug)]
-pub struct Roller(String);
 
 struct RngDiceRollSource<'a, T>
 where
@@ -209,183 +188,6 @@ pub trait Rollable {
 
     /// Evaluate and roll the dice with provided dice roll source
     fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Self::Roll;
-}
-
-impl Rollable for Roller {
-    type Roll = Result<RollResult>;
-
-    /// Evaluate and roll the dice with provided dice roll source
-    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Result<RollResult> {
-        let mut pairs = RollParser::parse(Rule::command, &self.0)?;
-        let expr_type = pairs.next().unwrap();
-        let mut roll_res = match expr_type.as_rule() {
-            Rule::expr => {
-                RollResult::new_single(parser::compute(expr_type.into_inner(), rng, false)?)
-            }
-            Rule::repeated_expr => Roller::process_repeated_expr(expr_type, rng)?,
-            _ => unreachable!(),
-        };
-
-        if let Some(reason) = pairs.next() {
-            if reason.as_rule() == Rule::reason {
-                roll_res.add_reason(reason.as_str()[1..].trim().to_owned());
-            }
-        }
-        Ok(roll_res)
-    }
-}
-
-impl Roller {
-    /// Store the input
-    ///
-    /// As of version 2.0.0, it always returns `Ok(Self)`.
-    ///
-    /// This is to have a stable API for further optimization where the parsing is done here (so it
-    /// can fail) and saved, see `Roller` documentation above.
-    ///
-    pub fn new(input: &str) -> Result<Self> {
-        Ok(Roller(input.to_owned()))
-    }
-
-    fn process_repeated_expr(
-        expr_type: Pair<Rule>,
-        rng: &mut dyn DiceRollSource,
-    ) -> Result<RollResult> {
-        let mut pairs = expr_type.into_inner();
-        let expr = pairs.next().unwrap();
-        let maybe_option = pairs.next().unwrap();
-        let (number, sum_all, sort) = match maybe_option.as_rule() {
-            Rule::number => (maybe_option.as_str().parse::<i64>().unwrap(), false, false),
-            Rule::add => (
-                pairs.next().unwrap().as_str().parse::<i64>().unwrap(),
-                true,
-                false,
-            ),
-            Rule::sort => (
-                pairs.next().unwrap().as_str().parse::<i64>().unwrap(),
-                false,
-                true,
-            ),
-            _ => unreachable!(),
-        };
-        if number <= 0 {
-            Err("Can't repeat 0 times or negatively".into())
-        } else {
-            let results: Result<Vec<SingleRollResult>> =
-                (0..number).try_fold(Vec::new(), |mut res, _| {
-                    let c = parser::compute(expr.clone().into_inner(), rng, false)?;
-                    res.push(c);
-                    Ok(res)
-                });
-            let mut results = results?;
-            if sort {
-                results.sort_unstable_by(|a, b| a.get_total().partial_cmp(&b.get_total()).unwrap());
-            }
-            let total = if sum_all {
-                Some(
-                    results
-                        .iter()
-                        .fold(0, |acc, current| acc + current.get_total()),
-                )
-            } else {
-                None
-            };
-            Ok(RollResult::new_repeated(results, total))
-        }
-    }
-
-    /// Get an iterator on the dices in the expression
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use caith::Roller;
-    ///
-    /// let r = Roller::new("1d6 + 1d4 + 1d10 + 1d20").unwrap();
-    /// assert_eq!(vec!["1d6", "1d4", "1d10", "1d20"], r.dices().expect("Error on parse").collect::<Vec<_>>());
-    /// ```
-    pub fn dices(&self) -> Result<Dices<'_>> {
-        let pairs = RollParser::parse(Rule::command, &self.0)?
-            .next()
-            .unwrap()
-            .into_inner();
-        Ok(Dices { pairs })
-    }
-
-    /// Give back the query string
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// Removes the reason from the Roller
-    pub fn trim_reason(&mut self) {
-        if let Some(idx) = self.0.find(REASON_CHAR) {
-            self.0 = self.0[..idx].to_owned()
-        }
-    }
-}
-
-/// An object holding the query.
-///
-/// Like [Roller] but only supports [SingleRollResult], and validates on creation.
-///
-#[derive(Clone, Debug)]
-pub struct SingleRoller(String);
-
-impl Rollable for SingleRoller {
-    type Roll = SingleRollResult;
-
-    fn roll_with_source(&self, rng: &mut dyn DiceRollSource) -> SingleRollResult {
-        self.try_roll_with_source(rng).unwrap()
-    }
-}
-
-impl SingleRoller {
-    /// Store the input
-    pub fn new(input: &str) -> Result<Self> {
-        let r = SingleRoller(input.to_owned());
-        match r.try_roll_with_source(&mut RngDiceRollSource {
-            rng: &mut rand::rng(),
-        }) {
-            Ok(_) => Ok(r),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Evaluate and roll the dice with provided dice roll source
-    fn try_roll_with_source(&self, rng: &mut dyn DiceRollSource) -> Result<SingleRollResult> {
-        // Extract root expression (expr)
-        let expr = {
-            let mut pairs = RollParser::parse(Rule::single_command, &self.0)?;
-            let expr_type = pairs.next().unwrap();
-            assert_eq!(expr_type.as_rule(), Rule::expr);
-            expr_type.into_inner()
-        };
-
-        let roll_res = parser::compute(expr, rng, false)?;
-        Ok(roll_res)
-    }
-
-    /// Give back the query string
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Iterator that lazily returns each dice of the expression.
-///
-/// See [`Roller::dices()`] for example
-///
-pub struct Dices<'a> {
-    pairs: Pairs<'a, Rule>,
-}
-
-impl<'a> Iterator for Dices<'a> {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        parser::find_first_dice(&mut self.pairs)
-    }
 }
 
 #[cfg(test)]

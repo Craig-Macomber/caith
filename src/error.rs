@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::{error::Error, fmt::Display, num::ParseIntError};
+use std::{error::Error, fmt::Display};
 
 use crate::parser::*;
 
