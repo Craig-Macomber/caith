@@ -704,27 +704,29 @@ mod tests {
     // the single threshold is ignored.
     #[test]
     fn target_number_double_lower_than_target_test() {
-        let r = SingleRoller::new("10d10 tt7 t9").unwrap();
-        let res = r.roll_with_source(&mut IteratorDiceRollSource {
-            iterator: &mut (1..11),
-        });
-        println!("{}", res);
+        let r = Expression::parse("10d10 tt7 t9").unwrap();
+        let res = r
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..11),
+            })
+            .unwrap();
         // We rolled one of every number. That's two successes each for the 7, 8, 9, and 10.
         // So eight total.
-        assert_eq!(res.get_total(), 8);
+        assert_eq!(res.total(), 8.0);
     }
 
     // Where a user has asked for a doubles without singles.
     #[test]
     fn target_number_double_only() {
-        let r = SingleRoller::new("10d10 tt8").unwrap();
-        let res = r.roll_with_source(&mut IteratorDiceRollSource {
-            iterator: &mut (1..11),
-        });
-        println!("{}", res);
+        let r = Expression::parse("10d10 tt8").unwrap();
+        let res = r
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..11),
+            })
+            .unwrap();
         // We rolled one of every number. That's two successes each for the 8, 9, and 10.
         // So six total.
-        assert_eq!(res.get_total(), 6);
+        assert_eq!(res.total(), 6.0);
     }
 
     #[test]
@@ -781,38 +783,38 @@ mod tests {
 
     #[test]
     fn keep_highest_single_1() {
-        let r = SingleRoller::new("2d10K1").unwrap();
+        let r = Expression::parse("2d10K1").unwrap();
         let res = r.roll_with_source(&mut IteratorDiceRollSource {
             iterator: &mut (1..11),
         });
-        let s = format!("{}", res.to_string(false));
-        assert_eq!(s, "[[1], 2] -> [2] = 2");
+        let s = format!("{}", res.unwrap().format(false, Verbosity::Medium));
+        assert_eq!(s, "[Drop(1), 2]K1 = 2");
     }
 
     #[test]
     fn keep_highest_single_2() {
-        let r = SingleRoller::new("2d10K1").unwrap();
+        let r = Expression::parse("2d10K1").unwrap();
         let res = r.roll_with_source(&mut IteratorDiceRollSource {
             iterator: &mut (1..11).rev(),
         });
-        let s = format!("{}", res.to_string(false));
-        assert_eq!(s, "[10, [9]] -> [10] = 10");
+        let s = format!("{}", res.unwrap().format(false, Verbosity::Medium));
+        assert_eq!(s, "[10, Drop(9)]K1 = 10");
     }
 
     #[test]
     fn keep_lowest_single() {
-        let r: SingleRoller = SingleRoller::new("2d10k1").unwrap();
+        let r = Expression::parse("2d10k1").unwrap();
         let res = r.roll_with_source(&mut IteratorDiceRollSource {
             iterator: &mut (1..11),
         });
-        let s = format!("{}", res.to_string(false));
-        assert_eq!(s, "[1, [2]] -> [1] = 1");
+        let s = format!("{}", res.unwrap().format(false, Verbosity::Medium));
+        assert_eq!(s, "[1, Drop(2)]k1 = 1");
 
         let res = r.roll_with_source(&mut IteratorDiceRollSource {
             iterator: &mut (1..11).rev(),
         });
-        let s = format!("{}", res.to_string(false));
-        assert_eq!(s, "[[10], 9] -> [9] = 9");
+        let s = format!("{}", res.unwrap().format(false, Verbosity::Medium));
+        assert_eq!(s, "[Drop(10), 9]k1 = 9");
     }
 
     #[test]
@@ -907,33 +909,32 @@ mod tests {
     #[test]
     fn no_reroll() {
         // This should deterministically roll a 1, then not reroll anything since 1 > 0
-        let roller = SingleRoller::new("1d1 r0").unwrap();
+        let roller = Expression::parse("1d1 r0").unwrap();
 
-        let result = roller.roll();
-        let history = result.to_string_history();
-        let as_string = result.to_string(false);
+        let result = roller.roll().unwrap();
+        let as_string = result.format(false, Verbosity::Medium);
 
-        assert_eq!(as_string, "[1] = 1");
-        assert_eq!(history, "[1]");
-        assert_eq!(result.get_total(), 1);
+        assert_eq!(as_string, "[1]r0 = 1");
+        assert_eq!(result.total(), 1.0);
     }
 
     #[test]
     fn infinite_reroll() {
-        let result = SingleRoller::new("1d1 ir1").unwrap_err();
+        let roll = Expression::parse("1d1 ir1").unwrap().roll();
+        let result = roll.unwrap_err();
         match result {
             RollError::ParseError(_) => assert!(false),
-            RollError::ParamError(text) => assert_eq!(text,"Cannot infinitely reroll dice of 1 or lower then the maximum roll is 1: this would go on forever")
+            RollError::ParamError(text) => assert_eq!(text,"Cannot infinitely reroll dice of 1 or lower since the maximum roll is 1: this would go on forever")
         }
     }
 
     #[test]
     fn multiple_reroll() {
-        let r: SingleRoller = SingleRoller::new("1d4 ir3").unwrap();
+        let r = Expression::parse("1d4 ir3").unwrap();
         let res = r.roll_with_source(&mut IteratorDiceRollSource {
             iterator: &mut (1..10),
         });
-        let s = format!("{}", res.to_string(false));
-        assert_eq!(s, "[1 -> 2] -> [2 -> 3] -> [3 -> 4] -> [4] = 4");
+        let s = format!("{}", res.unwrap().format(false, Verbosity::Medium));
+        assert_eq!(s, "[1🡲Reroll🡲2🡲Reroll🡲3🡲Reroll🡲4]ir3 = 4");
     }
 }

@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// A kind of dice which can be rolled.
-pub(crate) trait DiceKind: Copy + FromStr<Err: Debug> + 'static {
+pub(crate) trait DiceKind: Copy + FromStr<Err: Debug> + 'static + Debug {
     type Roll: Roll;
     fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll;
     fn max(&self) -> Self::Roll;
@@ -27,17 +27,17 @@ pub(crate) trait DiceKind: Copy + FromStr<Err: Debug> + 'static {
 }
 
 pub(crate) trait Roll:
-    Ord + Into<i64> + Copy + Hash + Display + FromStr<Err: Debug>
+    Ord + Into<i64> + Copy + Hash + Display + FromStr<Err: Debug> + Debug
 {
 }
 
 /// A parsed dice expression.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Expression(Rc<dyn ExpressionRollable>);
 
 pub type ExpressionResult = Result<Box<dyn EvaluatedExpression>>;
 
-pub(crate) trait ExpressionRollable {
+pub(crate) trait ExpressionRollable: Debug {
     /// Evaluate and roll the dice with provided dice roll source
     fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult;
 }
@@ -62,7 +62,7 @@ impl Expression {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum BinaryOp {
     Add,
     Sub,
@@ -93,6 +93,7 @@ impl BinaryOp {
     }
 }
 
+#[derive(Debug)]
 struct BinaryExpression<T> {
     left: T,
     op: BinaryOp,
@@ -156,6 +157,7 @@ impl EvaluatedExpression for i64 {
     }
 }
 
+#[derive(Debug)]
 struct BlockExpression<T> {
     inner: T,
 }
@@ -179,7 +181,7 @@ impl EvaluatedExpression for BlockExpression<Box<dyn EvaluatedExpression>> {
 }
 
 /// Result of evaluating an [Expression].
-pub trait EvaluatedExpression {
+pub trait EvaluatedExpression: Debug {
     /// Numeric result.
     /// Unless division or floats are involved, this will be an integer.
     fn total(&self) -> f64;

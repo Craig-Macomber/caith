@@ -205,7 +205,7 @@ fn compute_i_reroll(
     let value = extract_option_value(option).unwrap();
     if value >= sides {
         return Err(RollError::ParamError(
-            format!("Cannot infinitely reroll dice of {value} or lower then the maximum roll is {sides}: this would go on forever")
+            format!("Cannot infinitely reroll dice of {value} or lower since the maximum roll is {sides}: this would go on forever")
         ));
     }
     loop {

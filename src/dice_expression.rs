@@ -15,7 +15,7 @@ use crate::{
         Roll, Verbosity,
     },
     parser::{keep_low, DiceRollSource, Rule},
-    Expression, Result, Rollable,
+    Expression, Result, RollError, Rollable,
 };
 
 /// A batch of rolls of the same kind of dice.
@@ -163,7 +163,9 @@ impl<TRoll: Roll> Display for RollBatchModifier<TRoll> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RollBatchModifier::KeepOrDrop(keep_or_drop) => std::fmt::Display::fmt(&keep_or_drop, f),
-            RollBatchModifier::PerRollModifier(per_roll_modifier) => per_roll_modifier.fmt(f),
+            RollBatchModifier::PerRollModifier(per_roll_modifier) => {
+                Display::fmt(&per_roll_modifier, f)
+            }
         }
     }
 }
@@ -210,6 +212,8 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
         roll: TRoll,
         rng: &mut dyn DiceRollSource,
     ) -> Result<ModifiedRoll<TRoll>> {
+        let max = dice.max();
+        let min = dice.min();
         let modifier = match self {
             PerRollModifier::RerollOnce(n) => {
                 if roll <= *n {
@@ -219,8 +223,10 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
                 }
             }
             PerRollModifier::RerollUnlimited(n) => {
-                if *n >= dice.max() {
-                    return Err("Infinite rerolls".into());
+                if *n >= max {
+                    return Err(RollError::ParamError(
+                        format!("Cannot infinitely reroll dice of {n} or lower since the maximum roll is {max}: this would go on forever")
+                    ));
                 }
                 let new_rolls = roll_until(dice, roll, |next| next > *n, rng);
                 if new_rolls.len() > 0 {
@@ -238,7 +244,9 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
             }
             PerRollModifier::ExplodeUnlimited(n) => {
                 if *n <= dice.min() {
-                    return Err("Infinite explodes".into());
+                    return Err(RollError::ParamError(
+                        format!("Cannot infinitely explode dice of {n} or higher since the minimum roll is {min}: this would go on forever")
+                    ));
                 }
                 let new_rolls = roll_until(dice, roll, |next| next < *n, rng);
                 if new_rolls.len() > 0 {
@@ -295,6 +303,7 @@ impl<Dice: DiceKind + Clone> RollBatch<Dice> {
 }
 
 /// Specification for a single batch of dice to roll and process.
+#[derive(Debug)]
 struct RollSpec<Dice: DiceKind> {
     dice: Dice,
     number_of_dice: usize,
@@ -302,7 +311,7 @@ struct RollSpec<Dice: DiceKind> {
     aggregator: Aggregator<Dice::Roll>,
 }
 
-impl<Dice: DiceKind + 'static> ExpressionRollable for RollSpec<Dice> {
+impl<Dice: DiceKind> ExpressionRollable for RollSpec<Dice> {
     fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
         let x = self.dyn_roll(rng)?;
         let boxed: Box<dyn EvaluatedExpression> = Box::new(x);
@@ -344,6 +353,7 @@ impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
     }
 }
 
+#[derive(Debug)]
 struct EvaluatedRollSpec<Dice: DiceKind> {
     total: i64,
     /// All modifications applied to the batch of rolls. Empty of none.
@@ -406,7 +416,7 @@ where
 }
 
 // number represent nb dice to keep/drop
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Aggregator<TRoll> {
     /// These values are in order:
     /// (target (threshold for success),
@@ -568,12 +578,13 @@ pub(crate) fn parse_dice_inner<Dice: DiceKind>(
                 match value_or_enum.as_rule() {
                     Rule::number => {
                         let value = value_or_enum.as_str().parse::<Dice::Roll>().unwrap();
-                        let (target, fail) = match aggregator {
-                            Aggregator::TargetFailureDouble(t, f, None) => (t, f),
+                        let (double_target, fail) = match aggregator {
+                            Aggregator::TargetFailureDouble(None, f, tt) => (tt, f),
                             Aggregator::Sum => (None, None),
-                            _ => Err("Invalid: targets")?,
+                            _ => Err("Invalid targets 1")?,
                         };
-                        aggregator = Aggregator::TargetFailureDouble(target, fail, Some(value))
+                        aggregator =
+                            Aggregator::TargetFailureDouble(Some(value), fail, double_target)
                     }
 
                     Rule::target_enum => {
@@ -592,7 +603,7 @@ pub(crate) fn parse_dice_inner<Dice: DiceKind>(
                 let (target, fail) = match aggregator {
                     Aggregator::TargetFailureDouble(t, f, None) => (t, f),
                     Aggregator::Sum => (None, None),
-                    _ => Err("Invalid: targets")?,
+                    _ => Err("Invalid targets 2")?,
                 };
                 aggregator = Aggregator::TargetFailureDouble(target, fail, Some(value))
             }
@@ -601,7 +612,7 @@ pub(crate) fn parse_dice_inner<Dice: DiceKind>(
                 let (target, double_target) = match aggregator {
                     Aggregator::TargetFailureDouble(t, None, d) => (t, d),
                     Aggregator::Sum => (None, None),
-                    _ => Err("Invalid: targets")?,
+                    _ => Err("Invalid targets 3")?,
                 };
                 aggregator = Aggregator::TargetFailureDouble(target, Some(value), double_target)
             }
