@@ -224,6 +224,7 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
             }
             PerRollModifier::RerollUnlimited(n) => {
                 if *n >= max {
+                    // TODO: catch this during parse
                     return Err(RollError::ParamError(
                         format!("Cannot infinitely reroll dice of {n} or lower since the maximum roll is {max}: this would go on forever")
                     ));
@@ -244,6 +245,7 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
             }
             PerRollModifier::ExplodeUnlimited(n) => {
                 if *n <= dice.min() {
+                    // TODO: catch this during parse
                     return Err(RollError::ParamError(
                         format!("Cannot infinitely explode dice of {n} or higher since the minimum roll is {min}: this would go on forever")
                     ));
