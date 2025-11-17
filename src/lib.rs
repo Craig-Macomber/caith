@@ -419,117 +419,96 @@ mod tests {
 
     #[test]
     fn get_repeat_test() {
-        let r = Roller::new("(2d6 + 6) ^ 8 : test").unwrap();
+        let r = Command::parse("(2d6 + 6) ^ 8 : test").unwrap();
         let roll_mock = vec![3, 5, 3, 5, 3, 5, 3, 5, 3, 5, 3, 5, 3, 5, 3, 5];
         let roll_res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut roll_mock.into_iter(),
             })
             .unwrap();
-        match roll_res.get_result() {
-            rollresult::RollResultType::Single(_) => unreachable!(),
-            rollresult::RollResultType::Repeated(rep) => {
-                assert_eq!(8, rep.len());
-                for res in rep.iter() {
-                    assert_eq!(14, res.get_total());
-                }
-            }
-        }
-        eprintln!();
-        for res in roll_res.as_repeated().unwrap().iter() {
-            eprintln!("{}", res)
-        }
 
-        eprintln!();
-        eprintln!("{}", roll_res);
+        assert_eq!(8, roll_res.results().len());
+        for res in roll_res.results() {
+            assert_eq!(14.0, res.total());
+        }
     }
 
     #[test]
     fn get_repeat_sort_test() {
-        let r = Roller::new("(2d6 + 6) ^# 8 : test").unwrap();
+        let r = Command::parse("(2d6 + 6) ^# 8 : test").unwrap();
         let roll_mock = vec![3, 5, 1, 1, 6, 5, 3, 5, 4, 5, 2, 4, 3, 5, 1, 2];
         let mut expected = roll_mock
             .as_slice()
             .chunks(2)
-            .map(|two| two[0] as i64 + two[1] as i64 + 6)
+            .map(|two| two[0] as f64 + two[1] as f64 + 6.0)
             .collect::<Vec<_>>();
-        expected.sort_unstable();
+        expected.sort_by(f64::total_cmp);
         let roll_res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut roll_mock.into_iter(),
             })
             .unwrap();
-        match roll_res.get_result() {
-            rollresult::RollResultType::Single(_) => unreachable!(),
-            rollresult::RollResultType::Repeated(rep) => {
-                assert_eq!(8, rep.len());
-
-                let res_vec = rep.iter().map(|r| r.get_total()).collect::<Vec<_>>();
-                assert_eq!(expected, res_vec);
-            }
-        };
-        eprintln!("{}", roll_res);
+        assert_eq!(8, roll_res.results().len());
+        let res_vec = roll_res
+            .results()
+            .iter()
+            .map(|r| r.total())
+            .collect::<Vec<_>>();
+        assert_eq!(expected, res_vec);
     }
 
     #[test]
     fn get_repeat_sum_test() {
-        let r = Roller::new("(2d6 + 6) ^+ 2 : test").unwrap();
+        let r = Command::parse("(2d6 + 6) ^+ 2 : test").unwrap();
         let roll_mock = vec![3, 5, 4, 2];
         let expected = roll_mock
             .as_slice()
             .chunks(2)
-            .map(|two| two[0] as i64 + two[1] as i64 + 6)
+            .map(|two| two[0] as f64 + two[1] as f64 + 6.0)
             .collect::<Vec<_>>();
-        let expected: i64 = expected.iter().sum();
+        let expected: f64 = expected.iter().sum();
         let roll_res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut roll_mock.into_iter(),
             })
             .unwrap();
-        match roll_res.get_result() {
-            rollresult::RollResultType::Single(_) => unreachable!(),
-            rollresult::RollResultType::Repeated(rep) => {
-                assert_eq!(2, rep.len());
-                assert_eq!(expected, rep.get_total().unwrap());
-            }
-        }
-        eprintln!();
-        eprintln!("{}", roll_res);
+
+        assert_eq!(2, roll_res.results().len());
+        assert_eq!(expected, roll_res.total().unwrap());
+
+        assert_eq!(
+            roll_res.format(true, Verbosity::Short),
+            "([3, 5] + 6 = **14**) + ([4, 2] + 6 = **12**) = **26** : test"
+        );
     }
 
     #[test]
     fn get_single_test() {
-        let r = Roller::new("2d6 + 6 : test").unwrap();
+        let r = Command::parse("2d6 + 6 : test").unwrap();
         let roll_mock = vec![3, 5];
         let expected = roll_mock
             .as_slice()
             .chunks(2)
-            .map(|two| two[0] as i64 + two[1] as i64)
+            .map(|two| two[0] as f64 + two[1] as f64)
             .collect::<Vec<_>>();
-        let expected = expected.iter().sum::<i64>() + 6;
+        let expected = expected.iter().sum::<f64>() + 6.0;
         let roll_res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut roll_mock.into_iter(),
             })
             .unwrap();
-        match roll_res.get_result() {
-            rollresult::RollResultType::Single(res) => assert_eq!(expected, res.get_total()),
-            rollresult::RollResultType::Repeated(_) => unreachable!(),
-        }
-        eprintln!();
-        eprintln!("{}", roll_res.as_single().unwrap());
+        assert_eq!(roll_res.total().unwrap(), expected);
+        assert_eq!(
+            roll_res.format(false, Verbosity::Short),
+            "[3, 5] + 6 = 14 : test"
+        );
     }
 
     #[test]
     fn one_value_test() {
-        let r = Roller::new("20").unwrap();
+        let r = Command::parse("20").unwrap();
         let res = r.roll().unwrap();
-        let res = res.get_result();
-        if let RollResultType::Single(res) = res {
-            assert_eq!(20, res.get_total());
-        } else {
-            assert!(false);
-        }
+        assert_eq!(20.0, res.total().unwrap());
     }
 
     #[test]

@@ -191,12 +191,8 @@ pub trait EvaluatedExpression: Debug {
     /// Format history and total into one string.
     fn format(&self, markdown: bool, verbose: Verbosity) -> String {
         let history = self.format_history(markdown, verbose);
-        let total = self.total();
-        if markdown {
-            format!("{history} = **{total}**")
-        } else {
-            format!("{history} = {total}",)
-        }
+        let total = format_bold(self.total(), markdown);
+        format!("{history} = {total}",)
     }
 }
 
@@ -270,6 +266,14 @@ pub struct EvaluatedCommand {
     reason: Option<String>,
 }
 
+fn format_bold<V: Display>(value: V, markdown: bool) -> String {
+    if markdown {
+        format!("**{value}**")
+    } else {
+        format!("{value}")
+    }
+}
+
 impl EvaluatedCommand {
     /// If this command is a single (non-repeated) expression, OR a summed repeated expression, this gives the total.
     /// Otherwise there is no total, and [None] is returned.
@@ -293,7 +297,7 @@ impl EvaluatedCommand {
                         .map(|s| format!("({s})"))
                         .collect::<Vec<_>>()
                         .join(" + "),
-                    self.total.unwrap()
+                    format_bold(self.total.unwrap(), markdown)
                 ),
                 RepeatedMode::Sort | RepeatedMode::None => inner
                     .iter()
