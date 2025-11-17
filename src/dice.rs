@@ -29,10 +29,10 @@ impl DiceKind for NonZeroU32 {
 
 /// A [Fudge_dice](https://en.wikipedia.org/wiki/Fudge_%28role-playing_game_system%29#Fudge_dice).
 #[derive(Debug, Ord, Eq, Copy, PartialEq, Clone, PartialOrd)]
-struct Fudge;
+pub struct Fudge;
 
 #[derive(Debug, Ord, Eq, Copy, PartialEq, Clone, PartialOrd, Hash)]
-struct FudgeRoll {
+pub struct FudgeRoll {
     // Always -1, 0 or 1
     value: i8,
 }

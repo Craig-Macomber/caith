@@ -144,6 +144,8 @@ use pest::{
 pub mod helpers;
 
 mod dice;
+mod dice_expression;
+
 mod dice_kind;
 mod error;
 mod parser;
