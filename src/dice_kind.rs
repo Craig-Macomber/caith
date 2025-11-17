@@ -1,4 +1,10 @@
-use std::{fmt::Display, hash::Hash, rc::Rc};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+    num::NonZeroU32,
+    rc::Rc,
+    str::FromStr,
+};
 
 use pest::{
     iterators::{Pair, Pairs},
@@ -12,14 +18,17 @@ use crate::{
 };
 
 /// A kind of dice which can be rolled.
-pub(crate) trait DiceKind: Copy {
+pub(crate) trait DiceKind: Copy + FromStr<Err: Debug> + 'static {
     type Roll: Roll;
     fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll;
     fn max(&self) -> Self::Roll;
     fn min(&self) -> Self::Roll;
 }
 
-pub(crate) trait Roll: Ord + Into<i64> + Copy + Hash + Display {}
+pub(crate) trait Roll:
+    Ord + Into<i64> + Copy + Hash + Display + FromStr<Err: Debug>
+{
+}
 
 /// A parsed dice expression.
 #[derive(Clone)]
@@ -168,10 +177,16 @@ impl EvaluatedExpression for BlockExpression<Box<dyn EvaluatedExpression>> {
     }
 }
 
+/// Result of evaluating an [Expression].
 pub trait EvaluatedExpression {
+    /// Numeric result.
+    /// Unless division or floats are involved, this will be an integer.
     fn total(&self) -> f64;
+
+    /// Pretty print the rolls and adjustments to them which produced the result.
     fn format_history(&self, markdown: bool, verbose: Verbosity) -> String;
 
+    /// Format history and total into one string.
     fn format(&self, markdown: bool, verbose: Verbosity) -> String {
         let history = self.format_history(markdown, verbose);
         let total = self.total();
@@ -222,7 +237,7 @@ fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
                 }
                 Rule::dice => {
                     let expr = pair.into_inner();
-                    parse_dice(expr)?
+                    parse_dice::<NonZeroU32>(expr)?
                 }
                 _ => unreachable!("{:#?}", pair),
             })
@@ -257,11 +272,11 @@ fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
     )
 }
 
-pub(crate) fn extract_option_value(option: Pair<Rule>) -> Option<u32> {
+pub(crate) fn extract_option_value<T: FromStr<Err: Debug>>(option: Pair<Rule>) -> Option<T> {
     option
         .into_inner()
         .next()
-        .map(|p| p.as_str().parse::<u32>().unwrap())
+        .map(|p| p.as_str().parse::<T>().unwrap())
 }
 
 #[cfg(test)]
@@ -323,5 +338,47 @@ mod tests {
         );
 
         assert_eq!(result.total(), 11.0);
+    }
+
+    #[test]
+    fn fudge_minimal() {
+        let spec = Expression::parse("3dF").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..10),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format(true, Verbosity::Medium),
+            "[(-), ( ), (+)] = **0**"
+        );
+    }
+
+    #[test]
+    fn fudge() {
+        let spec = Expression::parse("3dF d1").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..10),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format(true, Verbosity::Medium),
+            "[~~*(-)*~~, ( ), (+)]d1 = **1**"
+        );
+    }
+
+    #[test]
+    fn mixed() {
+        let spec = Expression::parse("2dF + 1d6").unwrap();
+        let result = spec
+            .roll_with_source(&mut IteratorDiceRollSource {
+                iterator: &mut (1..10),
+            })
+            .unwrap();
+        assert_eq!(
+            result.format(true, Verbosity::Medium),
+            "[(-), ( )] + [3] = **2**"
+        );
     }
 }

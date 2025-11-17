@@ -30,7 +30,7 @@ xdy [OPTIONS] [TARGET] [FAILURE] [! REASON]
 
 roll `x` dice(s) with `y` sides
 
-`y` can also be "F" or "f" for fudge dice. In this case, no option applies and ignored if provided.
+`y` can also be "F" or "f" for fudge dice.
 
 Options:
 + - / * : modifiers

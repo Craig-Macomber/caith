@@ -1,14 +1,15 @@
 //! Implementation of [Expression] the `dice` rule in the grammar.
-//!
-//! TODO: this currently does not support [crate::dice::Fudge] dice.
-//! Either add support here or change the grammar to separate them so they
-//! explicitly not support (or customize) "options" and "target_failure".
 
-use std::{collections::HashSet, fmt::Display, num::NonZeroU32};
+use std::{
+    collections::HashSet,
+    fmt::{Debug, Display},
+    num::NonZeroU32,
+};
 
 use pest::iterators::Pairs;
 
 use crate::{
+    dice::Fudge,
     dice_kind::{
         extract_option_value, DiceKind, EvaluatedExpression, ExpressionResult, ExpressionRollable,
         Roll, Verbosity,
@@ -161,7 +162,7 @@ enum RollBatchModifier<Roll> {
 impl<TRoll: Roll> Display for RollBatchModifier<TRoll> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RollBatchModifier::KeepOrDrop(keep_or_drop) => keep_or_drop.fmt(f),
+            RollBatchModifier::KeepOrDrop(keep_or_drop) => std::fmt::Display::fmt(&keep_or_drop, f),
             RollBatchModifier::PerRollModifier(per_roll_modifier) => per_roll_modifier.fmt(f),
         }
     }
@@ -411,7 +412,7 @@ enum Aggregator<TRoll> {
     /// (target (threshold for success),
     /// failure (threshold for negative success),
     /// target doubled (threshold for two successes per dice))
-    TargetFailureDouble(TRoll, TRoll, TRoll),
+    TargetFailureDouble(Option<TRoll>, Option<TRoll>, Option<TRoll>),
     // List of specific values which count as success
     TargetEnum(HashSet<TRoll>),
     Sum,
@@ -425,15 +426,22 @@ impl<TRoll: Roll> Aggregator<TRoll> {
     pub fn apply_single(&self, roll: TRoll) -> i64 {
         match self {
             Aggregator::TargetFailureDouble(t, f, d) => {
-                if roll >= *d {
-                    2
-                } else if roll >= *t {
-                    1
-                } else if roll <= *f {
-                    -1
-                } else {
-                    0
+                if let Some(d) = *d {
+                    if roll >= d {
+                        return 2;
+                    }
                 }
+                if let Some(t) = *t {
+                    if roll >= t {
+                        return 1;
+                    }
+                }
+                if let Some(f) = *f {
+                    if roll <= f {
+                        return -1;
+                    }
+                }
+                0
             }
             Aggregator::TargetEnum(items) => {
                 if items.contains(&roll) {
@@ -476,7 +484,7 @@ impl KeepOrDrop {
     }
 }
 
-pub(crate) fn parse_dice(mut dice: Pairs<Rule>) -> Result<Expression> {
+pub(crate) fn parse_dice<Dice: DiceKind>(mut dice: Pairs<Rule>) -> Result<Expression> {
     let number_of_dice = dice.next().unwrap();
     let number_of_dice = match number_of_dice.as_rule() {
         Rule::number_of_dice => {
@@ -488,17 +496,27 @@ pub(crate) fn parse_dice(mut dice: Pairs<Rule>) -> Result<Expression> {
     };
 
     let pair = dice.next().unwrap();
-    let dice_parsed = match pair.as_rule() {
-        Rule::number => pair.as_str().parse::<NonZeroU32>().unwrap(),
-        //TODO:  Rule::fudge => (6, true),
+    match pair.as_rule() {
+        Rule::number => parse_dice_inner::<NonZeroU32>(
+            pair.as_str().parse::<NonZeroU32>().unwrap(),
+            number_of_dice,
+            dice,
+        ),
+        Rule::fudge => parse_dice_inner::<Fudge>(Fudge, number_of_dice, dice),
         _ => unreachable!("{:?}", pair),
-    };
+    }
+}
 
-    let sides: u32 = DiceKind::max(&dice_parsed).into();
+pub(crate) fn parse_dice_inner<Dice: DiceKind>(
+    dice_parsed: Dice,
+    number_of_dice: usize,
+    mut dice: Pairs<Rule>,
+) -> Result<Expression> {
+    let sides = dice_parsed.max();
 
-    let mut modifiers: Vec<RollBatchModifier<u32>> = vec![];
+    let mut modifiers: Vec<RollBatchModifier<Dice::Roll>> = vec![];
 
-    let mut aggregator: Aggregator<u32> = Aggregator::Sum;
+    let mut aggregator: Aggregator<Dice::Roll> = Aggregator::Sum;
     let mut next_option = dice.next();
 
     while next_option.is_some() {
@@ -531,45 +549,37 @@ pub(crate) fn parse_dice(mut dice: Pairs<Rule>) -> Result<Expression> {
             }
             Rule::keep_hi => {
                 let value = extract_option_value(option).unwrap();
-                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepHi(
-                    usize::try_from(value).unwrap(),
-                )));
+                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepHi(value)));
             }
             Rule::keep_lo => {
                 let value = extract_option_value(option).unwrap();
-                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepLo(
-                    usize::try_from(value).unwrap(),
-                )));
+                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::KeepLo(value)));
             }
             Rule::drop_hi => {
                 let value = extract_option_value(option).unwrap();
-                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::DropHi(
-                    usize::try_from(value).unwrap(),
-                )));
+                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::DropHi(value)));
             }
             Rule::drop_lo => {
                 let value = extract_option_value(option).unwrap();
-                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::DropLo(
-                    usize::try_from(value).unwrap(),
-                )));
+                modifiers.push(RollBatchModifier::KeepOrDrop(KeepOrDrop::DropLo(value)));
             }
             Rule::target => {
                 let value_or_enum = option.into_inner().next().unwrap();
                 match value_or_enum.as_rule() {
                     Rule::number => {
-                        let value = value_or_enum.as_str().parse::<u32>().unwrap();
+                        let value = value_or_enum.as_str().parse::<Dice::Roll>().unwrap();
                         let (target, fail) = match aggregator {
-                            Aggregator::TargetFailureDouble(t, f, 0) => (t, f),
-                            Aggregator::Sum => (sides + 1, 0),
+                            Aggregator::TargetFailureDouble(t, f, None) => (t, f),
+                            Aggregator::Sum => (None, None),
                             _ => Err("Invalid: targets")?,
                         };
-                        aggregator = Aggregator::TargetFailureDouble(target, fail, value)
+                        aggregator = Aggregator::TargetFailureDouble(target, fail, Some(value))
                     }
 
                     Rule::target_enum => {
                         let numbers_list = value_or_enum.into_inner();
                         let numbers_list: Vec<_> = numbers_list
-                            .map(|p| p.as_str().parse::<u32>().unwrap())
+                            .map(|p| p.as_str().parse::<Dice::Roll>().unwrap())
                             .collect();
                         aggregator =
                             Aggregator::TargetEnum(HashSet::from_iter(numbers_list.into_iter()))
@@ -580,20 +590,20 @@ pub(crate) fn parse_dice(mut dice: Pairs<Rule>) -> Result<Expression> {
             Rule::double_target => {
                 let value = extract_option_value(option).unwrap();
                 let (target, fail) = match aggregator {
-                    Aggregator::TargetFailureDouble(t, f, 0) => (t, f),
-                    Aggregator::Sum => (value, 0),
+                    Aggregator::TargetFailureDouble(t, f, None) => (t, f),
+                    Aggregator::Sum => (None, None),
                     _ => Err("Invalid: targets")?,
                 };
-                aggregator = Aggregator::TargetFailureDouble(target, fail, value)
+                aggregator = Aggregator::TargetFailureDouble(target, fail, Some(value))
             }
             Rule::failure => {
                 let value = extract_option_value(option).unwrap();
                 let (target, double_target) = match aggregator {
-                    Aggregator::TargetFailureDouble(t, 0, d) => (t, d),
-                    Aggregator::Sum => (0, sides + 1),
+                    Aggregator::TargetFailureDouble(t, None, d) => (t, d),
+                    Aggregator::Sum => (None, None),
                     _ => Err("Invalid: targets")?,
                 };
-                aggregator = Aggregator::TargetFailureDouble(target, value, double_target)
+                aggregator = Aggregator::TargetFailureDouble(target, Some(value), double_target)
             }
             _ => unreachable!("{:#?}", option),
         }

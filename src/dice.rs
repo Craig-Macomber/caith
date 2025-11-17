@@ -2,7 +2,12 @@
 //!
 //! Implementations of [DiceKind] and its output trait [Roll].
 
-use std::{fmt::Display, num::NonZeroU32};
+use std::{
+    error::Error,
+    fmt::{self, Display},
+    num::{IntErrorKind, NonZeroU32, ParseIntError},
+    str::FromStr,
+};
 
 use crate::{
     dice_kind::{DiceKind, Roll},
@@ -29,10 +34,10 @@ impl DiceKind for NonZeroU32 {
 
 /// A [Fudge_dice](https://en.wikipedia.org/wiki/Fudge_%28role-playing_game_system%29#Fudge_dice).
 #[derive(Debug, Ord, Eq, Copy, PartialEq, Clone, PartialOrd)]
-pub struct Fudge;
+pub(crate) struct Fudge;
 
 #[derive(Debug, Ord, Eq, Copy, PartialEq, Clone, PartialOrd, Hash)]
-pub struct FudgeRoll {
+pub(crate) struct FudgeRoll {
     // Always -1, 0 or 1
     value: i8,
 }
@@ -44,6 +49,34 @@ impl Display for FudgeRoll {
             0 => write!(f, "( )"),
             -1 => write!(f, "(-)"),
             _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ParseDiceError {
+    kind: IntErrorKind,
+}
+/// based on ParseIntError: https://doc.rust-lang.org/src/core/num/error.rs.html#123
+impl Display for ParseDiceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.kind {
+            IntErrorKind::Empty => "cannot parse integer from empty string",
+            IntErrorKind::InvalidDigit => "invalid digit found in string",
+            IntErrorKind::PosOverflow => "number too large to fit in target type",
+            IntErrorKind::NegOverflow => "number too small to fit in target type",
+            IntErrorKind::Zero => "number would be zero for non-zero type",
+            _ => "unknown error",
+        }
+        .fmt(f)
+    }
+}
+impl Error for ParseDiceError {}
+
+impl From<ParseIntError> for ParseDiceError {
+    fn from(value: ParseIntError) -> Self {
+        ParseDiceError {
+            kind: *value.kind(),
         }
     }
 }
@@ -63,6 +96,39 @@ impl Into<i64> for FudgeRoll {
     }
 }
 impl Roll for FudgeRoll {}
+
+impl FromStr for FudgeRoll {
+    type Err = ParseDiceError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = s.parse::<i8>()?;
+        if value > 1 {
+            Err(ParseDiceError {
+                kind: IntErrorKind::PosOverflow,
+            })
+        } else if value < -1 {
+            Err(ParseDiceError {
+                kind: IntErrorKind::NegOverflow,
+            })
+        } else {
+            Ok(FudgeRoll { value })
+        }
+    }
+}
+
+impl FromStr for Fudge {
+    type Err = ParseDiceError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "F" || s == "f" {
+            Ok(Fudge)
+        } else {
+            Err(ParseDiceError {
+                kind: IntErrorKind::InvalidDigit,
+            })
+        }
+    }
+}
 
 impl DiceKind for Fudge {
     type Roll = FudgeRoll;
