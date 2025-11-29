@@ -687,17 +687,17 @@ mod tests {
 
     #[test]
     fn fuzz_regression5() {
-        let result = Expression::parse("99d8255d9!9d5!!3").unwrap().roll();
+        _ = Expression::parse("99d8255d9!9d5!!3").unwrap().roll();
     }
 
     #[test]
     fn fuzz_regression6() {
-        let result = Expression::parse("4936d999!6").unwrap().roll();
+        _ = Expression::parse("4936d999!6").unwrap().roll();
     }
 
     #[test]
     fn fuzz_regression7() {
-        let result = Expression::parse("65d99ie3d99ie3d030303ed939ie3d99ie3D0")
+        _ = Expression::parse("65d99ie3d99ie3d030303ed939ie3d99ie3D0")
             .unwrap()
             .roll();
     }
