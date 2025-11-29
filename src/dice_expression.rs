@@ -313,6 +313,52 @@ struct RollSpec<Dice: DiceKind> {
     aggregator: Aggregator<Dice::Roll>,
 }
 
+impl<Dice: DiceKind> Display for RollSpec<Dice> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let modifiers = self
+            .modifiers
+            .iter()
+            .map(|m| format!(" {m}"))
+            .collect::<Vec<_>>()
+            .join("");
+        let aggregator = match &self.aggregator {
+            Aggregator::TargetFailureDouble(t, f, tt) => format!(
+                "{}{}{}",
+                match t {
+                    Some(n) => format!(" t{n}"),
+                    None => "".to_string(),
+                },
+                match f {
+                    Some(n) => format!(" f{n}"),
+                    None => "".to_string(),
+                },
+                match tt {
+                    Some(n) => format!(" tt{n}"),
+                    None => "".to_string(),
+                }
+            ),
+            Aggregator::TargetEnum(hash_set) => {
+                let mut items = hash_set.iter().collect::<Vec<_>>();
+                items.sort();
+                format!(
+                    " t[{}]",
+                    items
+                        .iter()
+                        .map(|n| format!("{n}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Aggregator::Sum => "".to_string(),
+        };
+        write!(
+            f,
+            "{}d{}{modifiers}{aggregator}",
+            self.number_of_dice, self.dice,
+        )
+    }
+}
+
 impl<Dice: DiceKind> ExpressionRollable for RollSpec<Dice> {
     fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
         let x = self.dyn_roll(rng)?;

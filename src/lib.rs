@@ -726,4 +726,9 @@ mod tests {
             _ => assert!(false),
         };
     }
+
+    #[test]
+    fn fuzz_regression10() {
+        _ = Command::parse("dF!(+)").unwrap();
+    }
 }

@@ -152,6 +152,12 @@ impl FromStr for Fudge {
     }
 }
 
+impl Display for Fudge {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("F")
+    }
+}
+
 impl DiceKind for Fudge {
     type Roll = FudgeRoll;
 

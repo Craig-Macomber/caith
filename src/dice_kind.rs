@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// A kind of dice which can be rolled.
-pub(crate) trait DiceKind: Copy + FromStr<Err: Debug> + 'static + Debug {
+pub(crate) trait DiceKind: Copy + FromStr<Err: Debug> + 'static + Debug + Display {
     type Roll: Roll;
     fn roll(&self, rng: &mut dyn DiceRollSource) -> Self::Roll;
     fn max(&self) -> Self::Roll;
@@ -34,9 +34,15 @@ pub(crate) trait Roll:
 #[derive(Clone, Debug)]
 pub struct Expression(Rc<dyn ExpressionRollable>);
 
+impl Display for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&*self.0, f)
+    }
+}
+
 pub type ExpressionResult = Result<Box<dyn EvaluatedExpression>>;
 
-pub(crate) trait ExpressionRollable: Debug {
+pub(crate) trait ExpressionRollable: Debug + Display {
     /// Evaluate and roll the dice with provided dice roll source
     fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult;
 }
@@ -79,13 +85,18 @@ impl BinaryOp {
         }
     }
 
-    fn format<T: Display>(&self, left: T, right: T) -> String {
+    fn format<T: Display>(&self, left: T, right: T, markdown: bool) -> String {
         format!(
-            "{left} {} {right}",
+            "{left}{}{right}",
             match self {
-                BinaryOp::Add => "+",
-                BinaryOp::Sub => "-",
-                BinaryOp::Mul => "*",
+                BinaryOp::Add => " + ",
+                BinaryOp::Sub => " - ",
+                BinaryOp::Mul =>
+                    if markdown {
+                        r"\*"
+                    } else {
+                        "*"
+                    },
                 BinaryOp::Div => "/",
             }
         )
@@ -97,6 +108,12 @@ struct BinaryExpression<T> {
     left: T,
     op: BinaryOp,
     right: T,
+}
+
+impl Display for BinaryExpression<Expression> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.op.format(&self.left, &self.right, false))
+    }
 }
 
 impl ExpressionRollable for BinaryExpression<Expression> {
@@ -120,6 +137,7 @@ impl EvaluatedExpression for BinaryExpression<Box<dyn EvaluatedExpression>> {
         self.op.format(
             self.left.format_history(markdown, verbose),
             self.right.format_history(markdown, verbose),
+            markdown,
         )
     }
 }
@@ -159,6 +177,13 @@ impl EvaluatedExpression for i64 {
 #[derive(Debug)]
 struct BlockExpression<T> {
     inner: T,
+}
+
+impl Display for BlockExpression<Expression> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inner = &*self.inner.0;
+        write!(f, "({})", inner)
+    }
 }
 
 impl ExpressionRollable for BlockExpression<Expression> {
@@ -226,6 +251,12 @@ pub struct Command {
     expression: Expression,
     repeat: Option<RepeatedCommand>,
     reason: Option<String>,
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expression)
+    }
 }
 
 impl Rollable for Command {
@@ -495,7 +526,7 @@ mod tests {
         let result = spec.roll().unwrap();
         assert_eq!(
             result.format_history(true, Verbosity::Medium),
-            "1 + 2 * 3 + [**1**🡵1]e1"
+            "1 + 2\\*3 + [**1**🡵1]e1"
         );
 
         assert_eq!(result.total(), 9.0);
@@ -507,7 +538,7 @@ mod tests {
         let result = spec.roll().unwrap();
         assert_eq!(
             result.format(true, Verbosity::Medium),
-            "1 + 2 * (3 + [**1**🡵1]e1) = **11**"
+            "1 + 2\\*(3 + [**1**🡵1]e1) = **11**"
         );
 
         assert_eq!(result.total(), 11.0);
@@ -627,5 +658,11 @@ mod tests {
     #[test]
     fn fudge_in_expression2() {
         _ = Command::parse("(1dF + 1dF)").unwrap().roll().unwrap();
+    }
+
+    #[test]
+    fn formatted_command() {
+        let s = format!("{}", Command::parse("(1dF + 1dF)").unwrap());
+        assert_eq!(s, "(1dF + 1dF)");
     }
 }
