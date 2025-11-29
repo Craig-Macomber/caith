@@ -12,7 +12,7 @@ use pest::{
 
 use crate::{
     dice::BasicDice,
-    dice_expression::parse_dice,
+    dice_expression::{limit_dice, parse_dice},
     parser::{get_climber, DiceRollSource, RollParser, Rule},
     Result, Rollable,
 };
@@ -378,16 +378,13 @@ fn process_repeated_expr(expr_type: Pair<Rule>) -> Result<Command> {
     let expr = pairs.next().unwrap();
     let maybe_option = pairs.next().unwrap();
     let (count, mode) = match maybe_option.as_rule() {
-        Rule::number => (
-            maybe_option.as_str().parse::<usize>().unwrap(),
-            RepeatedMode::None,
-        ),
+        Rule::number => (maybe_option.as_str().parse::<usize>()?, RepeatedMode::None),
         Rule::add => (
-            pairs.next().unwrap().as_str().parse::<usize>().unwrap(),
+            pairs.next().unwrap().as_str().parse::<usize>()?,
             RepeatedMode::Sum,
         ),
         Rule::sort => (
-            pairs.next().unwrap().as_str().parse::<usize>().unwrap(),
+            pairs.next().unwrap().as_str().parse::<usize>()?,
             RepeatedMode::Sort,
         ),
         _ => unreachable!(),
@@ -395,6 +392,7 @@ fn process_repeated_expr(expr_type: Pair<Rule>) -> Result<Command> {
     if count <= 0 {
         Err("Can't repeat 0 times or negatively".into())
     } else {
+        limit_dice(count, "repeated roll count")?;
         let c = parse_expression(expr.clone().into_inner())?;
         Ok(Command {
             expression: c,

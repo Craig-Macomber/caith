@@ -665,7 +665,10 @@ mod tests {
         let result = Expression::parse("922222229d979").unwrap_err();
         match result {
             RollError::ParamError(e) => {
-                assert_eq!(e, "Too many dice")
+                assert_eq!(
+                    e,
+                    "Exceed maximum allowed number of dice (5000) during parse."
+                )
             }
             _ => assert!(false),
         };
@@ -677,6 +680,48 @@ mod tests {
         match result {
             RollError::ParseError(e) => {
                 assert_eq!(format!("{e}"), "number too large to fit in target type")
+            }
+            _ => assert!(false),
+        };
+    }
+
+    #[test]
+    fn fuzz_regression5() {
+        let result = Expression::parse("99d8255d9!9d5!!3").unwrap().roll();
+    }
+
+    #[test]
+    fn fuzz_regression6() {
+        let result = Expression::parse("4936d999!6").unwrap().roll();
+    }
+
+    #[test]
+    fn fuzz_regression7() {
+        let result = Expression::parse("65d99ie3d99ie3d030303ed939ie3d99ie3D0")
+            .unwrap()
+            .roll();
+    }
+
+    #[test]
+    fn fuzz_regression8() {
+        let result = Command::parse("(9+9)^+70000000").unwrap_err();
+        match result {
+            RollError::ParamError(e) => {
+                assert_eq!(
+                    e,
+                    "Exceed maximum allowed number of dice (5000) during repeated roll count."
+                )
+            }
+            _ => assert!(false),
+        };
+    }
+
+    #[test]
+    fn fuzz_regression9() {
+        let result = Command::parse("(d9)^95555555555555555555").unwrap_err();
+        match result {
+            RollError::ParseError(e) => {
+                assert_eq!(e.to_string(), "number too large to fit in target type")
             }
             _ => assert!(false),
         };

@@ -228,7 +228,7 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
                         format!("Cannot infinitely reroll dice of {n} or lower since the maximum roll is {max}: this would go on forever")
                     ));
                 }
-                let new_rolls = roll_until(dice, roll, |next| next > *n, rng);
+                let new_rolls = roll_until(dice, roll, |next| next > *n, rng)?;
                 if new_rolls.len() > 0 {
                     RollModifier::Reroll(new_rolls)
                 } else {
@@ -249,7 +249,7 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
                         format!("Cannot infinitely explode dice of {n} or higher since the minimum roll is {min}: this would go on forever")
                     ));
                 }
-                let new_rolls = roll_until(dice, roll, |next| next < *n, rng);
+                let new_rolls = roll_until(dice, roll, |next| next < *n, rng)?;
                 if new_rolls.len() > 0 {
                     RollModifier::Explode(new_rolls)
                 } else {
@@ -273,12 +273,13 @@ fn roll_until<Dice: DiceKind>(
     mut roll: Dice::Roll,
     end_condition: impl Fn(Dice::Roll) -> bool,
     rng: &mut dyn DiceRollSource,
-) -> Vec<Dice::Roll> {
+) -> Result<Vec<Dice::Roll>> {
     let mut new_rolls = vec![];
     loop {
         if end_condition(roll) {
-            return new_rolls;
+            return Ok(new_rolls);
         }
+        limit_dice(new_rolls.len(), "rerolls")?;
         roll = dice.roll(rng);
         new_rolls.push(roll);
     }
@@ -320,6 +321,20 @@ impl<Dice: DiceKind> ExpressionRollable for RollSpec<Dice> {
     }
 }
 
+// Arbitrary limits to avoid OOM and hangs
+const MAX_NUMBER_OF_DICE: usize = 5_000;
+
+pub(crate) fn limit_dice(number_of_dice: usize, during: &str) -> Result<()> {
+    if number_of_dice > MAX_NUMBER_OF_DICE {
+        return Err(format!(
+            "Exceed maximum allowed number of dice ({MAX_NUMBER_OF_DICE}) during {during}.",
+        )
+        .into());
+    } else {
+        Ok(())
+    }
+}
+
 impl<Dice: DiceKind> RollSpec<Dice> {
     fn dyn_roll(&self, rng: &mut dyn DiceRollSource) -> Result<EvaluatedRollSpec<Dice>> {
         let mut rolls = RollBatch {
@@ -335,6 +350,7 @@ impl<Dice: DiceKind> RollSpec<Dice> {
         for modifier in &self.modifiers {
             let next = ModifiedRollBatch::new(&rolls, *modifier, rng)?;
             rolls.rolls = next.after();
+            limit_dice(rolls.rolls.len(), "batch aggregation")?;
             history.push((modifier.clone(), next));
         }
 
@@ -516,9 +532,7 @@ pub(crate) fn parse_dice<Dice: DiceKind>(mut dice: Pairs<Rule>) -> Result<Expres
         _ => unreachable!("{:?}", number_of_dice),
     };
 
-    if number_of_dice > 10000 {
-        return Err("Too many dice".into());
-    }
+    limit_dice(number_of_dice, "parse")?;
 
     let pair = dice.next().unwrap();
     match pair.as_rule() {
