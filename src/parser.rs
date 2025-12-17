@@ -19,16 +19,13 @@ where
     F: FnMut(Pair<'i, Rule>) -> T,
     G: FnMut(T, Pair<'i, Rule>, T) -> T + 'i,
 {
-    static PREC_CLIMBER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
+    static PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
         use pest::pratt_parser::{Assoc, Op};
         PrattParser::new()
             .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::sub, Assoc::Left))
             .op(Op::infix(Rule::mul, Assoc::Left) | Op::infix(Rule::div, Assoc::Left))
     });
-    PREC_CLIMBER
-        .map_primary(primary)
-        .map_infix(infix)
-        .parse(pairs)
+    PARSER.map_primary(primary).map_infix(infix).parse(pairs)
 }
 
 /// Copy `v`, but with the top (as defined by `f`) `to_drop` entries flagged with false and the rest with true.

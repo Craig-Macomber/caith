@@ -112,9 +112,9 @@ impl FudgeRoll {
     }
 }
 
-impl Into<i64> for FudgeRoll {
-    fn into(self) -> i64 {
-        self.value.into()
+impl From<FudgeRoll> for i64 {
+    fn from(val: FudgeRoll) -> Self {
+        val.value.into()
     }
 }
 impl Roll for FudgeRoll {}

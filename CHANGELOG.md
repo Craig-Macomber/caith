@@ -7,7 +7,7 @@
 - FIX: OOM error on too big numbers. We now limit to 5000 dices of 5000 sides.
 Thanks to @Monadic-Cat for setting up the fuzzy tests that discovers these.
 Some panics still can occurs when numbers are very big and overflow on operation but I 
-think it's the correct behaviour.
+think it's the correct behavior.
 
 # 4.2.1
 - FIX: translation issue in CdE ill dice

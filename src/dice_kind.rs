@@ -142,12 +142,13 @@ impl EvaluatedExpression for BinaryExpression<Box<dyn EvaluatedExpression>> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+
 struct RollableFloat(f64);
 
 impl ExpressionRollable for RollableFloat {
     fn expression_roll(&self, _rng: &mut dyn DiceRollSource) -> ExpressionResult {
-        Ok(Box::new(RollableFloat { 0: self.0 }))
+        Ok(Box::new(self.clone()))
     }
 }
 
@@ -249,7 +250,7 @@ pub enum Verbosity {
 /// Parse a single (non-repeated) dice expression.
 fn parse_single_command(s: &str) -> Result<Expression> {
     let expr = {
-        let mut pairs = RollParser::parse(Rule::single_command, &s)?;
+        let mut pairs = RollParser::parse(Rule::single_command, s)?;
         let expr_type = pairs.next().unwrap();
         assert_eq!(expr_type.as_rule(), Rule::expr);
         expr_type.into_inner()
@@ -434,7 +435,7 @@ fn process_repeated_expr(expr_type: Pair<Rule>) -> Result<Command> {
         ),
         _ => unreachable!(),
     };
-    if count <= 0 {
+    if count == 0 {
         Err("Can't repeat 0 times or negatively".into())
     } else {
         limit_dice(count, "repeated roll count")?;
@@ -453,9 +454,9 @@ fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
         |pair: Pair<Rule>| {
             Ok(match pair.as_rule() {
                 Rule::integer => Expression::new(pair.as_str().replace(' ', "").parse::<i64>()?),
-                Rule::float => Expression::new(RollableFloat {
-                    0: pair.as_str().replace(' ', "").parse::<f64>()?,
-                }),
+                Rule::float => Expression::new(RollableFloat(
+                    pair.as_str().replace(' ', "").parse::<f64>()?,
+                )),
                 Rule::block_expr => {
                     let expr = pair.into_inner().next().unwrap().into_inner();
                     Expression::new(BlockExpression {

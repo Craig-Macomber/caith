@@ -94,7 +94,7 @@ impl<TRoll: Roll> ModifiedRoll<TRoll> {
         let len = items.len();
         Some(self.before)
             .into_iter()
-            .chain(items.into_iter())
+            .chain(items)
             .take(len)
     }
 }
@@ -104,7 +104,7 @@ impl<TRoll: Copy> ModifiedRoll<TRoll> {
         match &self.modifier {
             RollModifier::None => vec![self.before],
             RollModifier::Drop => vec![],
-            RollModifier::Reroll(r) => vec![r.last().unwrap_or(&self.before).clone()],
+            RollModifier::Reroll(r) => vec![*r.last().unwrap_or(&self.before)],
             RollModifier::Explode(r) => {
                 let mut v = vec![self.before];
                 v.extend(r);
@@ -229,7 +229,7 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
                     ));
                 }
                 let new_rolls = roll_until(dice, roll, |next| next > *n, rng)?;
-                if new_rolls.len() > 0 {
+                if !new_rolls.is_empty() {
                     RollModifier::Reroll(new_rolls)
                 } else {
                     RollModifier::None
@@ -250,7 +250,7 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
                     ));
                 }
                 let new_rolls = roll_until(dice, roll, |next| next < *n, rng)?;
-                if new_rolls.len() > 0 {
+                if !new_rolls.is_empty() {
                     RollModifier::Explode(new_rolls)
                 } else {
                     RollModifier::None
@@ -372,10 +372,10 @@ const MAX_NUMBER_OF_DICE: usize = 5_000;
 
 pub(crate) fn limit_dice(number_of_dice: usize, during: &str) -> Result<()> {
     if number_of_dice > MAX_NUMBER_OF_DICE {
-        return Err(format!(
+        Err(format!(
             "Exceed maximum allowed number of dice ({MAX_NUMBER_OF_DICE}) during {during}.",
         )
-        .into());
+        .into())
     } else {
         Ok(())
     }
@@ -397,7 +397,7 @@ impl<Dice: DiceKind> RollSpec<Dice> {
             let next = ModifiedRollBatch::new(&rolls, *modifier, rng)?;
             rolls.rolls = next.after();
             limit_dice(rolls.rolls.len(), "batch aggregation")?;
-            history.push((modifier.clone(), next));
+            history.push((*modifier, next));
         }
 
         Ok(EvaluatedRollSpec {
@@ -545,22 +545,22 @@ impl KeepOrDrop {
     ) -> Result<Vec<(bool, T)>> {
         let res = match self {
             KeepOrDrop::KeepHi(n) => {
-                keep_low(&v, *n, |result| std::cmp::Reverse(get_number(&result)))?
+                keep_low(v, *n, |result| std::cmp::Reverse(get_number(result)))?
             }
-            KeepOrDrop::KeepLo(n) => keep_low(&v, *n, |result| get_number(&result))?,
+            KeepOrDrop::KeepLo(n) => keep_low(v, *n, |result| get_number(result))?,
             KeepOrDrop::DropHi(n) => keep_low(
-                &v,
+                v,
                 v.len().checked_sub(*n).ok_or_else(|| {
                     format!("Cannot drop {n} dice when there are only {}", v.len())
                 })?,
-                |result| get_number(&result),
+                |result| get_number(result),
             )?,
             KeepOrDrop::DropLo(n) => keep_low(
-                &v,
+                v,
                 v.len().checked_sub(*n).ok_or_else(|| {
                     format!("Cannot drop {n} dice when there are only {}", v.len())
                 })?,
-                |result| std::cmp::Reverse(get_number(&result)),
+                |result| std::cmp::Reverse(get_number(result)),
             )?,
         };
         Ok(res)
