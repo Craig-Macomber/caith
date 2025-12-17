@@ -9,8 +9,10 @@ use std::{
 use pest::iterators::{Pair, Pairs};
 
 use crate::{
-    dice::{EvaluatedExpression, Expression, ExpressionResult, ExpressionRollable, Verbosity},
     dice_kind::{basic::BasicDice, fudge::Fudge, DiceKind, Roll},
+    expression::{
+        EvaluatedExpression, Expression, ExpressionResult, ExpressionRollable, Verbosity,
+    },
     keep_or_drop::KeepOrDrop,
     parser::{DiceRollSource, Rule},
     Result, RollError, Rollable,

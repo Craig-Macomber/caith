@@ -1,7 +1,7 @@
 use super::{EvaluatedExpression, Expression};
 use crate::{
-    dice::{format_bold, parse_expression},
     dice_expression::limit_dice,
+    expression::{format_bold, parse_expression},
     parser::{DiceRollSource, RollParser, Rule},
     Result, Rollable, Verbosity,
 };

@@ -136,8 +136,8 @@
 //! and add four.
 //!
 
-mod dice;
 mod dice_expression;
+mod expression;
 
 mod command;
 mod dice_kind;
@@ -145,7 +145,7 @@ mod error;
 mod keep_or_drop;
 mod parser;
 
-pub use dice::{EvaluatedExpression, Expression, Verbosity};
+pub use expression::{EvaluatedExpression, Expression, Verbosity};
 
 pub use command::{Command, EvaluatedCommand};
 
