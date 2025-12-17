@@ -8,8 +8,8 @@ use pest::iterators::{Pair, Pairs};
 use crate::{
     dice_expression::parse_dice,
     dice_kind::basic::BasicDice,
-    parser::{climb, DiceRollSource, Rule},
-    Result, Rollable,
+    parser::{climb, Rule},
+    DiceRollSource, Result, Rollable,
 };
 
 /// A parsed dice expression.

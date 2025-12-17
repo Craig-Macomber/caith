@@ -151,8 +151,13 @@ pub use command::{Command, EvaluatedCommand};
 
 pub use error::*;
 
-use parser::DiceRollSource;
 use rand::Rng;
+
+/// A source of dice rolls.
+pub trait DiceRollSource {
+    /// Provides a number to be used by a dice roll.
+    fn roll_single_die(&mut self, sides: u64) -> u64;
+}
 
 struct RngDiceRollSource<'a, T>
 where

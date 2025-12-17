@@ -2,8 +2,8 @@ use super::{EvaluatedExpression, Expression};
 use crate::{
     dice_expression::limit_dice,
     expression::{format_bold, parse_expression},
-    parser::{DiceRollSource, RollParser, Rule},
-    Result, Rollable, Verbosity,
+    parser::{RollParser, Rule},
+    DiceRollSource, Result, Rollable, Verbosity,
 };
 use pest::{iterators::Pair, Parser};
 use std::fmt::Display;

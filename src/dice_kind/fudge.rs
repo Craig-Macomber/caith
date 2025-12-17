@@ -7,7 +7,7 @@ use std::{
 use crate::{
     dice_kind::ParseDiceError,
     dice_kind::{DiceKind, Roll},
-    parser::DiceRollSource,
+    DiceRollSource,
 };
 
 /// A [Fudge_dice](https://en.wikipedia.org/wiki/Fudge_%28role-playing_game_system%29#Fudge_dice).

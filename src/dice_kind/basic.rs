@@ -1,4 +1,4 @@
-use crate::parser::DiceRollSource;
+use crate::DiceRollSource;
 
 use crate::dice_kind::{DiceKind, Roll};
 

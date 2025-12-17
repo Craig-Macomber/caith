@@ -14,8 +14,8 @@ use crate::{
         EvaluatedExpression, Expression, ExpressionResult, ExpressionRollable, Verbosity,
     },
     keep_or_drop::KeepOrDrop,
-    parser::{DiceRollSource, Rule},
-    Result, RollError, Rollable,
+    parser::Rule,
+    DiceRollSource, Result, RollError, Rollable,
 };
 
 /// A batch of rolls of the same kind of dice.

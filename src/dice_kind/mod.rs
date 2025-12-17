@@ -10,7 +10,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{parser::DiceRollSource, RollError};
+use crate::{DiceRollSource, RollError};
 
 /// A kind of dice which can be rolled.
 pub(crate) trait DiceKind:

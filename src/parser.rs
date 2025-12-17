@@ -3,10 +3,6 @@ use std::sync::LazyLock;
 use pest::{iterators::Pair, pratt_parser::PrattParser};
 use pest_derive::Parser;
 
-pub trait DiceRollSource {
-    fn roll_single_die(&mut self, sides: u64) -> u64;
-}
-
 #[derive(Parser)]
 #[grammar = "caith.pest"]
 pub(crate) struct RollParser;
