@@ -142,15 +142,29 @@ impl EvaluatedExpression for BinaryExpression<Box<dyn EvaluatedExpression>> {
     }
 }
 
-impl ExpressionRollable for f64 {
+#[derive(Debug)]
+struct RollableFloat(f64);
+
+impl ExpressionRollable for RollableFloat {
     fn expression_roll(&self, _rng: &mut dyn DiceRollSource) -> ExpressionResult {
-        Ok(Box::new(*self))
+        Ok(Box::new(RollableFloat { 0: self.0 }))
     }
 }
 
-impl EvaluatedExpression for f64 {
+impl Display for RollableFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.fract() == 0.0 {
+            // Include ".0" at the end of integer values so if they round trip, its clear they are a float not an int.
+            write!(f, "{:.1}", self.0)
+        } else {
+            write!(f, "{:.}", self.0)
+        }
+    }
+}
+
+impl EvaluatedExpression for RollableFloat {
     fn total(&self) -> f64 {
-        *self
+        self.0
     }
 
     fn format_history(&self, _markdown: bool, _verbose: Verbosity) -> String {
@@ -439,7 +453,9 @@ fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
         |pair: Pair<Rule>| {
             Ok(match pair.as_rule() {
                 Rule::integer => Expression::new(pair.as_str().replace(' ', "").parse::<i64>()?),
-                Rule::float => Expression::new(pair.as_str().replace(' ', "").parse::<f64>()?),
+                Rule::float => Expression::new(RollableFloat {
+                    0: pair.as_str().replace(' ', "").parse::<f64>()?,
+                }),
                 Rule::block_expr => {
                     let expr = pair.into_inner().next().unwrap().into_inner();
                     Expression::new(BlockExpression {

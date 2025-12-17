@@ -758,4 +758,14 @@ mod tests {
     fn fuzz_regression15() {
         _ = Expression::parse("d8t(+)").unwrap_err();
     }
+
+    #[test]
+    fn fuzz_regression16() {
+        let data = "9999999999999999943.3";
+        let roller = Command::parse(data).unwrap();
+        let f = format!("{roller}");
+        let parsed2 = Command::parse(&f).unwrap();
+        let f2 = format!("{parsed2}");
+        assert_eq!(f, f2);
+    }
 }
