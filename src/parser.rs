@@ -1,4 +1,4 @@
-use std::sync::{Arc, Once, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 
 use pest::{iterators::Pair, pratt_parser::PrattParser};
 use pest_derive::Parser;
@@ -36,29 +36,19 @@ impl Climber {
 }
 
 pub(crate) fn get_climber() -> Climber {
-    static mut PREC_CLIMBER: *const Climber = 0 as *const Climber;
-    static ONCE: Once = Once::new();
+    static PREC_CLIMBER: LazyLock<Climber> = LazyLock::new(|| {
+        use pest::pratt_parser::{Assoc, Op};
 
-    unsafe {
-        ONCE.call_once(|| {
-            use pest::pratt_parser::{Assoc, Op};
-
-            // Make it
-            let singleton = Climber {
-                inner: Arc::new(RwLock::new(
-                    PrattParser::new()
-                        .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::sub, Assoc::Left))
-                        .op(Op::infix(Rule::mul, Assoc::Left) | Op::infix(Rule::div, Assoc::Left)),
-                )),
-            };
-
-            // Put it in the heap so it can outlive this call
-            PREC_CLIMBER = std::mem::transmute(Box::new(singleton));
-        });
-
-        // Now we give out a copy of the data that is safe to use concurrently.
-        (*PREC_CLIMBER).clone()
-    }
+        // Make it
+        Climber {
+            inner: Arc::new(RwLock::new(
+                PrattParser::new()
+                    .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::sub, Assoc::Left))
+                    .op(Op::infix(Rule::mul, Assoc::Left) | Op::infix(Rule::div, Assoc::Left)),
+            )),
+        }
+    });
+    (*PREC_CLIMBER).clone()
 }
 
 /// Copy `v`, but with the top (as defined by `f`) `to_drop` entries flagged with false and the rest with true.
