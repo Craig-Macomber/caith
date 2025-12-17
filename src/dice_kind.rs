@@ -13,7 +13,7 @@ use pest::{
 use crate::{
     dice::BasicDice,
     dice_expression::{limit_dice, parse_dice},
-    parser::{get_climber, DiceRollSource, RollParser, Rule},
+    parser::{climb, DiceRollSource, RollParser, Rule},
     Result, Rollable,
 };
 
@@ -448,7 +448,7 @@ fn process_repeated_expr(expr_type: Pair<Rule>) -> Result<Command> {
 }
 
 fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
-    get_climber().climb(
+    climb(
         expr,
         |pair: Pair<Rule>| {
             Ok(match pair.as_rule() {

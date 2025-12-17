@@ -1,4 +1,4 @@
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::LazyLock;
 
 use pest::{iterators::Pair, pratt_parser::PrattParser};
 use pest_derive::Parser;
@@ -13,42 +13,22 @@ pub trait DiceRollSource {
 #[grammar = "caith.pest"]
 pub(crate) struct RollParser;
 
-// Struct to have a singleton of PrecClimber without using once_cell
-#[derive(Clone)]
-pub(crate) struct Climber {
-    inner: Arc<RwLock<PrattParser<Rule>>>,
-}
-
-impl Climber {
-    pub fn climb<'i, P, F, G, T>(&self, pairs: P, primary: F, infix: G) -> T
-    where
-        P: Iterator<Item = Pair<'i, Rule>>,
-        F: FnMut(Pair<'i, Rule>) -> T,
-        G: FnMut(T, Pair<'i, Rule>, T) -> T + 'i,
-    {
-        self.inner
-            .read()
-            .unwrap()
-            .map_primary(primary)
-            .map_infix(infix)
-            .parse(pairs)
-    }
-}
-
-pub(crate) fn get_climber() -> Climber {
-    static PREC_CLIMBER: LazyLock<Climber> = LazyLock::new(|| {
+pub(crate) fn climb<'i, P, F, G, T>(pairs: P, primary: F, infix: G) -> T
+where
+    P: Iterator<Item = Pair<'i, Rule>>,
+    F: FnMut(Pair<'i, Rule>) -> T,
+    G: FnMut(T, Pair<'i, Rule>, T) -> T + 'i,
+{
+    static PREC_CLIMBER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
         use pest::pratt_parser::{Assoc, Op};
-
-        // Make it
-        Climber {
-            inner: Arc::new(RwLock::new(
-                PrattParser::new()
-                    .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::sub, Assoc::Left))
-                    .op(Op::infix(Rule::mul, Assoc::Left) | Op::infix(Rule::div, Assoc::Left)),
-            )),
-        }
+        PrattParser::new()
+            .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::sub, Assoc::Left))
+            .op(Op::infix(Rule::mul, Assoc::Left) | Op::infix(Rule::div, Assoc::Left))
     });
-    (*PREC_CLIMBER).clone()
+    PREC_CLIMBER
+        .map_primary(primary)
+        .map_infix(infix)
+        .parse(pairs)
 }
 
 /// Copy `v`, but with the top (as defined by `f`) `to_drop` entries flagged with false and the rest with true.
