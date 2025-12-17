@@ -139,11 +139,15 @@
 mod dice;
 mod dice_expression;
 
+mod command;
 mod dice_kind;
 mod error;
+mod keep_or_drop;
 mod parser;
 
-pub use dice_kind::{Command, EvaluatedCommand, EvaluatedExpression, Expression, Verbosity};
+pub use dice::{EvaluatedExpression, Expression, Verbosity};
+
+pub use command::{Command, EvaluatedCommand};
 
 pub use error::*;
 
@@ -255,7 +259,7 @@ mod tests {
 
     #[test]
     fn get_repeat_sum_test() {
-        let r = Command::parse("(2d6 + 6) ^+ 2 : test").unwrap();
+        let r = command::Command::parse("(2d6 + 6) ^+ 2 : test").unwrap();
         let roll_mock = vec![3, 5, 4, 2];
         let expected = roll_mock
             .as_slice()
@@ -280,7 +284,7 @@ mod tests {
 
     #[test]
     fn get_single_test() {
-        let r = Command::parse("2d6 + 6 : test").unwrap();
+        let r = command::Command::parse("2d6 + 6 : test").unwrap();
         let roll_mock = vec![3, 5];
         let expected = roll_mock
             .as_slice()
@@ -302,14 +306,14 @@ mod tests {
 
     #[test]
     fn one_value_test() {
-        let r = Command::parse("20").unwrap();
+        let r = command::Command::parse("20").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(20.0, res.total().unwrap());
     }
 
     #[test]
     fn one_dice_test() {
-        let r = Command::parse("d20").unwrap();
+        let r = command::Command::parse("d20").unwrap();
         let roll_mock = vec![8];
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
@@ -321,63 +325,63 @@ mod tests {
 
     #[test]
     fn float_mul_test() {
-        let r = Command::parse("20 * 1.5").unwrap();
+        let r = command::Command::parse("20 * 1.5").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(30.0, res.total().unwrap());
     }
 
     #[test]
     fn float_signed_mul_test() {
-        let r = Command::parse("20 * +1.5").unwrap();
+        let r = command::Command::parse("20 * +1.5").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(30.0, res.total().unwrap());
     }
 
     #[test]
     fn float_neg_signed_mul_test() {
-        let r = Command::parse("20 * -1.5").unwrap();
+        let r = command::Command::parse("20 * -1.5").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(-30.0, res.total().unwrap());
     }
 
     #[test]
     fn float_add_test() {
-        let r = Command::parse("20 + 1.5").unwrap();
+        let r = command::Command::parse("20 + 1.5").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(21.5, res.total().unwrap());
     }
 
     #[test]
     fn float_signed_add_test() {
-        let r = Command::parse("20 + +1.5").unwrap();
+        let r = command::Command::parse("20 + +1.5").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(21.5, res.total().unwrap());
     }
 
     #[test]
     fn float_neg_signed_add_test() {
-        let r = Command::parse("20 + -1.5").unwrap();
+        let r = command::Command::parse("20 + -1.5").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(18.5, res.total().unwrap());
     }
 
     #[test]
     fn signed_add_test() {
-        let r = Command::parse("20 + +5").unwrap();
+        let r = command::Command::parse("20 + +5").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(25.0, res.total().unwrap());
     }
 
     #[test]
     fn signed_neg_add_test() {
-        let r = Command::parse("20 + -5").unwrap();
+        let r = command::Command::parse("20 + -5").unwrap();
         let res = r.roll().unwrap();
         assert_eq!(15.0, res.total().unwrap());
     }
 
     #[test]
     fn counting_roller_test() {
-        let r = Command::parse("3d6").unwrap();
+        let r = command::Command::parse("3d6").unwrap();
         let rolls = vec![3, 6, 3];
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
@@ -389,7 +393,7 @@ mod tests {
 
     #[test]
     fn target_number_test() {
-        let r = Command::parse("10d10 t7").unwrap();
+        let r = command::Command::parse("10d10 t7").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
@@ -402,7 +406,7 @@ mod tests {
 
     #[test]
     fn target_number_double_test() {
-        let r = Command::parse("10d10 t7 tt9").unwrap();
+        let r = command::Command::parse("10d10 t7 tt9").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
@@ -444,7 +448,7 @@ mod tests {
 
     #[test]
     fn target_order_of_results() {
-        let r = Command::parse("2d10").unwrap();
+        let r = command::Command::parse("2d10").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
@@ -456,7 +460,7 @@ mod tests {
 
     #[test]
     fn keep_highest() {
-        let r = Command::parse("2d10K1").unwrap();
+        let r = command::Command::parse("2d10K1").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
@@ -476,7 +480,7 @@ mod tests {
 
     #[test]
     fn keep_lowest() {
-        let r = Command::parse("2d10k1").unwrap();
+        let r = command::Command::parse("2d10k1").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..11),
@@ -532,7 +536,7 @@ mod tests {
 
     #[test]
     fn target_enum() {
-        let r = Command::parse("6d6 t[2,4,6]").unwrap();
+        let r = command::Command::parse("6d6 t[2,4,6]").unwrap();
         let res = r
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..7),
@@ -563,7 +567,10 @@ mod tests {
 
     #[test]
     fn sandbox_test() {
-        Command::parse("5d6 + 4 * 2").unwrap().roll().unwrap();
+        command::Command::parse("5d6 + 4 * 2")
+            .unwrap()
+            .roll()
+            .unwrap();
     }
 
     #[test]
@@ -704,7 +711,7 @@ mod tests {
 
     #[test]
     fn fuzz_regression8() {
-        let result = Command::parse("(9+9)^+70000000").unwrap_err();
+        let result = command::Command::parse("(9+9)^+70000000").unwrap_err();
         match result {
             RollError::ParamError(e) => {
                 assert_eq!(
@@ -718,7 +725,7 @@ mod tests {
 
     #[test]
     fn fuzz_regression9() {
-        let result = Command::parse("(d9)^95555555555555555555").unwrap_err();
+        let result = command::Command::parse("(d9)^95555555555555555555").unwrap_err();
         match result {
             RollError::ParseError(e) => {
                 assert_eq!(e.to_string(), "number too large to fit in target type")
@@ -762,9 +769,9 @@ mod tests {
     #[test]
     fn round_trip_floats() {
         let data = "9999999999999999943.3";
-        let roller = Command::parse(data).unwrap();
+        let roller = command::Command::parse(data).unwrap();
         let f = format!("{roller}");
-        let parsed2 = Command::parse(&f).unwrap();
+        let parsed2 = command::Command::parse(&f).unwrap();
         let f2 = format!("{parsed2}");
         assert_eq!(f, f2);
     }

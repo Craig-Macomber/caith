@@ -1,4 +1,4 @@
-//! Implementation of [Expression] the `dice` rule in the grammar.
+//! Implementation of [Expression] for the `dice` rule in the grammar.
 
 use std::{
     collections::HashSet,
@@ -9,12 +9,11 @@ use std::{
 use pest::iterators::{Pair, Pairs};
 
 use crate::{
-    dice::{BasicDice, Fudge},
-    dice_kind::{
-        DiceKind, EvaluatedExpression, ExpressionResult, ExpressionRollable, Roll, Verbosity,
-    },
-    parser::{keep_low, DiceRollSource, Rule},
-    Expression, Result, RollError, Rollable,
+    dice::{EvaluatedExpression, Expression, ExpressionResult, ExpressionRollable, Verbosity},
+    dice_kind::{basic::BasicDice, fudge::Fudge, DiceKind, Roll},
+    keep_or_drop::KeepOrDrop,
+    parser::{DiceRollSource, Rule},
+    Result, RollError, Rollable,
 };
 
 /// A batch of rolls of the same kind of dice.
@@ -92,10 +91,7 @@ impl<TRoll: Roll> ModifiedRoll<TRoll> {
     /// Iterate over before then all but the last item in items
     fn chain(&self, items: Vec<TRoll>) -> impl Iterator<Item = TRoll> {
         let len = items.len();
-        Some(self.before)
-            .into_iter()
-            .chain(items)
-            .take(len)
+        Some(self.before).into_iter().chain(items).take(len)
     }
 }
 
@@ -525,45 +521,6 @@ impl<TRoll: Roll> Aggregator<TRoll> {
             }
             Aggregator::Sum => Into::<i64>::into(roll),
         }
-    }
-}
-
-/// Number of dice to keep or drop.
-#[derive(Copy, Clone, PartialEq, Debug)]
-enum KeepOrDrop {
-    KeepHi(usize),
-    KeepLo(usize),
-    DropHi(usize),
-    DropLo(usize),
-}
-
-impl KeepOrDrop {
-    pub fn apply<T: Clone, Key: Ord + Copy>(
-        &self,
-        v: &[T],
-        get_number: impl Fn(&T) -> Key,
-    ) -> Result<Vec<(bool, T)>> {
-        let res = match self {
-            KeepOrDrop::KeepHi(n) => {
-                keep_low(v, *n, |result| std::cmp::Reverse(get_number(result)))?
-            }
-            KeepOrDrop::KeepLo(n) => keep_low(v, *n, |result| get_number(result))?,
-            KeepOrDrop::DropHi(n) => keep_low(
-                v,
-                v.len().checked_sub(*n).ok_or_else(|| {
-                    format!("Cannot drop {n} dice when there are only {}", v.len())
-                })?,
-                |result| get_number(result),
-            )?,
-            KeepOrDrop::DropLo(n) => keep_low(
-                v,
-                v.len().checked_sub(*n).ok_or_else(|| {
-                    format!("Cannot drop {n} dice when there are only {}", v.len())
-                })?,
-                |result| std::cmp::Reverse(get_number(result)),
-            )?,
-        };
-        Ok(res)
     }
 }
 
