@@ -760,7 +760,7 @@ mod tests {
     }
 
     #[test]
-    fn fuzz_regression16() {
+    fn round_trip_floats() {
         let data = "9999999999999999943.3";
         let roller = Command::parse(data).unwrap();
         let f = format!("{roller}");
