@@ -123,6 +123,16 @@ impl FromStr for FudgeRoll {
     type Err = ParseDiceError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "(+)" {
+            return Ok(FudgeRoll { value: 1 });
+        }
+        if s == "( )" {
+            return Ok(FudgeRoll { value: 0 });
+        }
+        if s == "(-)" {
+            return Ok(FudgeRoll { value: -1 });
+        }
+
         let value = s.parse::<i8>()?;
         if value > 1 {
             Err(ParseDiceError {

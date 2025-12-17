@@ -9,24 +9,31 @@ mul = { "*" }
 div = { "/" }
 
 dice = { number_of_dice? ~ (roll ~ dice_side) ~ option* ~ target_failure{, 3} }
+
+// An instance of a DiceKind
 dice_side = _{ number | fudge }
+
+// An instance of a DiceKind's roll type
+dice_value = _{ number | fudge_value }
+fudge_value = @{ "(-)" | "( )" | "(+)" }
+
 fudge = { "F" | "f" }
 roll = { "d" | "D" }
 option = _{ explode | i_explode | reroll | i_reroll | keep_hi | keep_lo | drop_hi | drop_lo }
 target_failure = _{ target | double_target | failure }
-explode = { "e" ~ number? }
-i_explode = { ("ie" | "!") ~ number? }
-reroll = { "r" ~ number }
-i_reroll = { "ir" ~ number }
+explode = { "e" ~ dice_value? }
+i_explode = { ("ie" | "!") ~ dice_value? }
+reroll = { "r" ~ dice_value }
+i_reroll = { "ir" ~ dice_value }
 keep_hi = { "K" ~ number }
 keep_lo = { "k" ~ number }
 drop_hi = { "D" ~ number }
 drop_lo = { "d" ~ number }
-target =  { "t" ~ (number | target_enum) }
-double_target = { "tt" ~ number }
-failure =  { "f" ~ number }
-target_enum = { "[" ~ number_list ~ "]"}
-number_list = _{ number ~ ("," ~ number)* }
+target =  { "t" ~ (dice_value | target_enum) }
+double_target = { "tt" ~ dice_value }
+failure =  { "f" ~ dice_value }
+target_enum = { "[" ~ dice_value_list ~ "]"}
+dice_value_list = _{ dice_value ~ ("," ~ dice_value)* }
 
 repeated_expr = { "(" ~ expr ~ ")" ~ "^" ~ (add | sort)? ~ number }
 

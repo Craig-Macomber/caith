@@ -34,8 +34,8 @@ roll `x` dice(s) with `y` sides
 
 Options:
 + - / * : modifiers
-e# : Explode value. If number is omitted, we use dice sides
-ie# or !# : Indefinite explode value, If number is omitted, we use dice sides
+e# : Explode value. If number is omitted, we use the maximum value of the dice
+ie# or !# : Indefinite explode value, If number is omitted, we use the maximum value of the dice
 K#  : Keeping # highest (uppercase "K")
 k#  : Keeping # lowest (lowercase "k")
 D#  : Dropping the highest (uppercase "D")

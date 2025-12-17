@@ -594,7 +594,9 @@ fn extract_option_value<T: FromStr<Err: Debug>>(option: Pair<Rule>) -> Result<Op
 where
     RollError: From<T::Err>,
 {
-    let x = match option.into_inner().next() {
+    let mut inner = option.into_inner();
+    let next = inner.next();
+    let x = match next {
         Some(p) => Some(p.as_str().parse::<T>()?),
         None => None,
     };
@@ -663,7 +665,7 @@ where
             Rule::target => {
                 let value_or_enum = option.into_inner().next().unwrap();
                 match value_or_enum.as_rule() {
-                    Rule::number => {
+                    Rule::number | Rule::fudge_value => {
                         let value = value_or_enum.as_str().parse::<Dice::Roll>()?;
                         let (double_target, fail) = match aggregator {
                             Aggregator::TargetFailureDouble(None, f, tt) => (tt, f),

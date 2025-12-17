@@ -1,9 +1,9 @@
 # Fuzz
 
 ```sh
-cargo fuzz run raw_parser
+cargo fuzz run --jobs 32 raw_parser
 ```
 
 ```sh
-cargo fuzz run roundtrip
+cargo fuzz run --jobs 32 roundtrip
 ```

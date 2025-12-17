@@ -729,6 +729,33 @@ mod tests {
 
     #[test]
     fn fuzz_regression10() {
-        _ = Command::parse("dF!(+)").unwrap();
+        _ = Expression::parse("dF!(+)").unwrap();
+    }
+
+    #[test]
+    fn fuzz_regression11() {
+        let e = Expression::parse("dFf1").unwrap();
+        let f = format!("{}", e);
+        assert_eq!(f, "1dF f(+)");
+        let e = Expression::parse(&f).unwrap();
+        let f = format!("{}", e);
+        assert_eq!(f, "1dF f(+)");
+    }
+
+    #[test]
+    fn fuzz_regression12() {
+        _ = Expression::parse("1dF f(+)").unwrap();
+    }
+
+    #[test]
+    fn fuzz_regression14() {
+        let e = Expression::parse("1dF !( )").unwrap();
+        let f = format!("{}", e);
+        assert_eq!(f, "1dF !( )");
+    }
+
+    #[test]
+    fn fuzz_regression15() {
+        _ = Expression::parse("d8t(+)").unwrap_err();
     }
 }
