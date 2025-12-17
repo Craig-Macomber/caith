@@ -1,4 +1,4 @@
-use super::{dice_expression, EvaluatedExpression, Expression};
+use super::{EvaluatedExpression, Expression};
 use crate::{
     dice::{format_bold, parse_expression},
     dice_expression::limit_dice,
@@ -24,9 +24,9 @@ pub(crate) fn parse_single_command(s: &str) -> Result<Expression> {
 /// A parsed command.
 #[derive(Debug)]
 pub struct Command {
-    pub(crate) expression: Expression,
-    pub(crate) repeat: Option<RepeatedCommand>,
-    pub(crate) reason: Option<String>,
+    expression: Expression,
+    repeat: Option<RepeatedCommand>,
+    reason: Option<String>,
 }
 
 impl Display for Command {

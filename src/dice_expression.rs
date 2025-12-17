@@ -386,8 +386,7 @@ impl<Dice: DiceKind> RollSpec<Dice> {
             dice: self.dice,
         };
 
-        let mut history: Vec<(RollBatchModifier<Dice::Roll>, ModifiedRollBatch<Dice::Roll>)> =
-            vec![];
+        let mut history: History<Dice::Roll> = vec![];
 
         for modifier in &self.modifiers {
             let next = ModifiedRollBatch::new(&rolls, *modifier, rng)?;
@@ -412,11 +411,13 @@ impl<Dice: DiceKind> Rollable for RollSpec<Dice> {
     }
 }
 
+type History<Roll> = Vec<(RollBatchModifier<Roll>, ModifiedRollBatch<Roll>)>;
+
 #[derive(Debug)]
 struct EvaluatedRollSpec<Dice: DiceKind> {
     total: i64,
     /// All modifications applied to the batch of rolls. Empty of none.
-    history: Vec<(RollBatchModifier<Dice::Roll>, ModifiedRollBatch<Dice::Roll>)>,
+    history: History<Dice::Roll>,
     /// The final dice, after apply all modifications.
     ///
     /// Same as `.after()` for last entry in history (when history is not empty).
