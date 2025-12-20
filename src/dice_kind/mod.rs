@@ -57,19 +57,19 @@ impl From<ParseIntError> for ParseDiceError {
 
 impl From<ParseDiceError> for RollError {
     fn from(value: ParseDiceError) -> Self {
-        RollError::ParseError(Box::new(value))
+        RollError::parse_error(Box::new(value))
     }
 }
 
 impl From<ParseIntError> for RollError {
     fn from(e: ParseIntError) -> Self {
-        RollError::ParseError(Box::new(e))
+        RollError::parse_error(e)
     }
 }
 
 impl From<ParseFloatError> for RollError {
     fn from(e: ParseFloatError) -> Self {
-        RollError::ParseError(Box::new(e))
+        RollError::parse_error(e)
     }
 }
 

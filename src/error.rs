@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::rc::Rc;
 use std::{error::Error, fmt::Display};
 
 use crate::parser::*;
@@ -7,12 +8,18 @@ use crate::parser::*;
 pub type Result<T> = std::result::Result<T, RollError>;
 
 /// The error reported
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RollError {
     /// Error while parsing the expression, emitted by `pest`
-    ParseError(Box<dyn Error>),
+    ParseError(Box<Rc<dyn Error>>),
     /// Any other error while walking the AST, the String contains an explanation of what happened
     ParamError(String),
+}
+
+impl RollError {
+    pub(crate) fn parse_error(e: impl Error + 'static) -> RollError {
+        RollError::ParseError(Box::new(Rc::new(e)))
+    }
 }
 
 impl Display for RollError {
@@ -28,7 +35,7 @@ impl Error for RollError {}
 
 impl From<pest::error::Error<Rule>> for RollError {
     fn from(e: pest::error::Error<Rule>) -> Self {
-        RollError::ParseError(Box::new(e))
+        RollError::parse_error(e)
     }
 }
 
