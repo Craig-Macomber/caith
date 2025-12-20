@@ -138,6 +138,5 @@ performed instead.
 
 These commands can be combined. For example:
 
-`10d6 e6 K8 +4` : Roll ten six-sided dice , explode on sixes and keep eight of the highest rolls
+`10d6 e6 K8 + 4` : Roll ten six-sided dice, explode on sixes and keep eight of the highest rolls
 and add four.
-

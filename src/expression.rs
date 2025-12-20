@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::{Debug, Display},
     rc::Rc,
 };
@@ -9,7 +10,7 @@ use crate::{
     dice_expression::parse_dice,
     dice_kind::basic::BasicDice,
     parser::{climb, Rule},
-    DiceRollSource, Result, Rollable,
+    DiceRollSource, Result, RollError, Rollable,
 };
 
 /// A parsed dice expression.
@@ -196,6 +197,27 @@ impl EvaluatedExpression for BlockExpression<Box<dyn EvaluatedExpression>> {
     }
 }
 
+#[derive(Debug)]
+struct VariableReference {
+    identifier: String,
+    inner: Expression,
+}
+
+impl ExpressionRollable for VariableReference {
+    fn expression_roll(&self, rng: &mut dyn DiceRollSource) -> ExpressionResult {
+        Ok(Box::new(BlockExpression {
+            inner: self.inner.roll_with_source(rng)?,
+        }))
+    }
+}
+
+impl Display for VariableReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inner = &*self.inner.0;
+        write!(f, "(${}: {})", self.identifier, inner)
+    }
+}
+
 /// Result of evaluating an [Expression].
 pub trait EvaluatedExpression: Debug {
     /// Numeric result.
@@ -232,7 +254,11 @@ pub(crate) fn format_bold<V: Display>(value: V, markdown: bool) -> String {
     }
 }
 
-pub(crate) fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
+pub(crate) fn parse_expression(
+    expr: Pairs<Rule>,
+    variables: &HashMap<String, Expression>,
+) -> Result<Expression> {
+    let _ = variables;
     climb(
         expr,
         |pair: Pair<Rule>| {
@@ -244,12 +270,26 @@ pub(crate) fn parse_expression(expr: Pairs<Rule>) -> Result<Expression> {
                 Rule::block_expr => {
                     let expr = pair.into_inner().next().unwrap().into_inner();
                     Expression::new(BlockExpression {
-                        inner: parse_expression(expr)?,
+                        inner: parse_expression(expr, variables)?,
                     })
                 }
                 Rule::dice => {
                     let expr = pair.into_inner();
                     parse_dice::<BasicDice>(expr)?
+                }
+                Rule::variable_identifier => {
+                    let identifier = pair.as_str();
+                    match variables.get(identifier) {
+                        Some(expression) => Expression::new(VariableReference {
+                            identifier: identifier.to_string(),
+                            inner: expression.clone(),
+                        }),
+                        None => {
+                            return Err(RollError::ParamError(format!(
+                                "Reference to undefined variable \"{identifier}\""
+                            )))
+                        }
+                    }
                 }
                 _ => unreachable!("{:#?}", pair),
             })

@@ -6,10 +6,13 @@ use crate::{
     DiceRollSource, Result, Rollable, Verbosity,
 };
 use pest::{iterators::Pair, Parser};
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 /// Parse a single (non-repeated) dice expression.
-pub(crate) fn parse_single_command(s: &str) -> Result<Expression> {
+pub(crate) fn parse_single_command(
+    s: &str,
+    variables: &HashMap<String, Expression>,
+) -> Result<Expression> {
     let expr = {
         let mut pairs = RollParser::parse(Rule::single_command, s)?;
         let expr_type = pairs.next().unwrap();
@@ -17,7 +20,7 @@ pub(crate) fn parse_single_command(s: &str) -> Result<Expression> {
         expr_type.into_inner()
     };
 
-    let roll_res = parse_expression(expr)?;
+    let roll_res = parse_expression(expr, variables)?;
     Ok(roll_res)
 }
 
@@ -138,15 +141,23 @@ impl EvaluatedCommand {
 impl Command {
     /// Parse a command expression.
     pub fn parse(s: &str) -> Result<Command> {
+        Command::parse_with_variables(s, &HashMap::default())
+    }
+
+    /// Parse a command expression.
+    pub fn parse_with_variables(
+        s: &str,
+        variables: &HashMap<String, Expression>,
+    ) -> Result<Command> {
         let mut pairs = RollParser::parse(Rule::command, s)?;
         let expr_type = pairs.next().unwrap();
         let mut command = match expr_type.as_rule() {
             Rule::expr => Command {
-                expression: parse_expression(expr_type.into_inner())?,
+                expression: parse_expression(expr_type.into_inner(), variables)?,
                 repeat: None,
                 reason: None,
             },
-            Rule::repeated_expr => process_repeated_expr(expr_type)?,
+            Rule::repeated_expr => process_repeated_expr(expr_type, variables)?,
             _ => unreachable!(),
         };
 
@@ -172,7 +183,10 @@ enum RepeatedMode {
     None,
 }
 
-fn process_repeated_expr(expr_type: Pair<Rule>) -> Result<Command> {
+fn process_repeated_expr(
+    expr_type: Pair<Rule>,
+    variables: &HashMap<String, Expression>,
+) -> Result<Command> {
     let mut pairs = expr_type.into_inner();
     let expr = pairs.next().unwrap();
     let maybe_option = pairs.next().unwrap();
@@ -192,7 +206,7 @@ fn process_repeated_expr(expr_type: Pair<Rule>) -> Result<Command> {
         Err("Can't repeat 0 times or negatively".into())
     } else {
         limit_dice(count, "repeated roll count")?;
-        let c = parse_expression(expr.clone().into_inner())?;
+        let c = parse_expression(expr.clone().into_inner(), variables)?;
         Ok(Command {
             expression: c,
             repeat: Some(RepeatedCommand { count, mode }),
@@ -204,7 +218,15 @@ fn process_repeated_expr(expr_type: Pair<Rule>) -> Result<Command> {
 impl Expression {
     /// Parse as string into an [Expression].
     pub fn parse(expression: &str) -> Result<Expression> {
-        parse_single_command(expression)
+        Expression::parse_with_variables(expression, &HashMap::default())
+    }
+
+    /// Parse as string into an [Expression].
+    pub fn parse_with_variables(
+        expression: &str,
+        variables: &HashMap<String, Expression>,
+    ) -> Result<Expression> {
+        parse_single_command(expression, variables)
     }
 }
 
@@ -215,7 +237,7 @@ mod tests {
 
     #[test]
     fn dice_command_sum() {
-        let spec = parse_single_command("2d20 e2").unwrap();
+        let spec = Expression::parse("2d20 e2").unwrap();
         let result = spec
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..21).chain(Some(20)),
@@ -231,7 +253,7 @@ mod tests {
 
     #[test]
     fn dice_command_check() {
-        let spec = parse_single_command("20d20 e tt20").unwrap();
+        let spec = Expression::parse("20d20 e tt20").unwrap();
         let result = spec
             .roll_with_source(&mut IteratorDiceRollSource {
                 iterator: &mut (1..21).chain(Some(20)),
@@ -247,7 +269,7 @@ mod tests {
 
     #[test]
     fn single_command() {
-        let spec = parse_single_command("1 + 2 * 3 + 1d1 e1").unwrap();
+        let spec = Expression::parse("1 + 2 * 3 + 1d1 e1").unwrap();
         let result = spec.roll().unwrap();
         assert_eq!(
             result.format_history(true, Verbosity::Medium),
@@ -335,5 +357,18 @@ mod tests {
     fn formatted_command() {
         let s = format!("{}", Command::parse("(1dF + 1dF)").unwrap());
         assert_eq!(s, "(1dF + 1dF)");
+    }
+
+    #[test]
+    fn variable() {
+        let mut vars: HashMap<String, Expression, _> = HashMap::default();
+        vars.insert("Var".to_string(), Expression::parse("5").unwrap());
+        let minimal = Expression::parse_with_variables("$Var", &vars).unwrap();
+        assert_eq!(format!("{minimal}"), "($Var: 5)");
+        assert_eq!(minimal.roll().unwrap().total(), 5.0);
+
+        let mixed = Expression::parse_with_variables("1 + $Var", &vars).unwrap();
+        assert_eq!(format!("{mixed}"), "1 + ($Var: 5)");
+        assert_eq!(mixed.roll().unwrap().total(), 6.0);
     }
 }

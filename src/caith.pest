@@ -37,8 +37,12 @@ dice_value_list = _{ dice_value ~ ("," ~ dice_value)* }
 
 repeated_expr = { "(" ~ expr ~ ")" ~ "^" ~ (add | sort)? ~ number }
 
+// A reference to an externally provided variable
+variable = _{ "$" ~ variable_identifier }
+variable_identifier = @{ ( LETTER | NUMBER )+ }
+
 expr = { leaf ~ (op ~ leaf)* }
-leaf = _{ dice |  float | integer | block_expr }
+leaf = _{ dice | float | integer | block_expr | variable }
 block_expr = { "(" ~ expr ~ ")" }
 integer = { ("+" | "-")? ~ number }
 reason = { ":" ~ ANY* }
