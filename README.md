@@ -4,7 +4,7 @@ A dice roller library written in Rust.
 
 This crate aims at providing everything needed for playing tabletop RPGs.
 
-This is a fork of [caith](https://github.com/Geobert/caith) use by [https://inland.martials.org/](https://inland.martials.org/).
+This is a fork of [caith](https://github.com/Geobert/caith) used by [https://inland.martials.org/](https://inland.martials.org/).
 
 # Syntax
 
