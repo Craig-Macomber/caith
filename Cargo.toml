@@ -1,6 +1,6 @@
 [package]
 name = "dicey"
-version = "4.2.4"
+version = "0.1.0"
 authors = ["Craig Macomber <CraigM@CraigM.info>"]
 edition = "2024"
 description = "A dice roller library supporting many features"

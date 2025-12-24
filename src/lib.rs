@@ -447,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn caith_minimal() {
+    fn minimal() {
         // This should deterministically roll a 1
         let roller = Expression::parse(&"1d1").unwrap();
 
