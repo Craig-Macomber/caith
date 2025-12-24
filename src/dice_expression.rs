@@ -444,34 +444,39 @@ impl<Dice: DiceKind> EvaluatedExpression for EvaluatedRollSpec<Dice> {
                 let original = first.1.rolls.iter().map(|m| m.before);
                 format!(
                     "{} 🡲 {}",
-                    format_rolls(original),
-                    format_rolls(self.final_rolls.rolls.iter())
+                    format_rolls(original, markdown),
+                    format_rolls(self.final_rolls.rolls.iter(), markdown)
                 )
             } else {
                 let mut stages = vec![];
                 for s in &self.history {
-                    let rolls = format_rolls(s.1.rolls.iter().map(|m| m.format(markdown)));
+                    let rolls =
+                        format_rolls(s.1.rolls.iter().map(|m| m.format(markdown)), markdown);
                     let stage = format!("{}{}", rolls, s.0);
                     stages.push(stage);
                 }
 
                 if matches!(verbose, Verbosity::Verbose) {
-                    stages.push(format_rolls(self.final_rolls.rolls.iter()));
+                    stages.push(format_rolls(self.final_rolls.rolls.iter(), markdown));
                 }
 
                 stages.join(" 🡲 ")
             }
         } else {
-            format_rolls(self.final_rolls.rolls.iter())
+            format_rolls(self.final_rolls.rolls.iter(), markdown)
         }
     }
 }
 
-fn format_rolls<I: Iterator>(rolls: I) -> String
+fn format_rolls<I: Iterator>(rolls: I, markdown: bool) -> String
 where
     I::Item: Display,
 {
-    format!("[{}]", format_join(rolls, ", "))
+    if markdown {
+        format!("\\[{}\\]", format_join(rolls, ", "))
+    } else {
+        format!("[{}]", format_join(rolls, ", "))
+    }
 }
 
 fn format_join<I: Iterator>(rolls: I, sep: &str) -> String
@@ -749,7 +754,7 @@ mod tests {
         );
         assert_eq!(
             result.format_history(true, Verbosity::Short),
-            "[1, 2, 3, 4] 🡲 [5, 4, 6]"
+            "\\[1, 2, 3, 4\\] 🡲 \\[5, 4, 6\\]"
         );
         assert_eq!(
             result.format_history(false, Verbosity::Medium),
@@ -757,7 +762,7 @@ mod tests {
         );
         assert_eq!(
             result.format_history(true, Verbosity::Medium),
-            "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**&#x200B;🡵5, **4**&#x200B;🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1"
+            "\\[~~*1*~~, ~~*2*~~, 3, 4\\]K2 🡲 \\[**3**&#x200B;🡵5, **4**&#x200B;🡵6\\]e1 🡲 \\[~~*3*~~, 5, 4, 6\\]d1"
         );
 
         assert_eq!(
@@ -766,7 +771,7 @@ mod tests {
         );
         assert_eq!(
             result.format_history(true, Verbosity::Verbose),
-            "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**&#x200B;🡵5, **4**&#x200B;🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1 🡲 [5, 4, 6]"
+            "\\[~~*1*~~, ~~*2*~~, 3, 4\\]K2 🡲 \\[**3**&#x200B;🡵5, **4**&#x200B;🡵6\\]e1 🡲 \\[~~*3*~~, 5, 4, 6\\]d1 🡲 \\[5, 4, 6\\]"
         );
     }
 }

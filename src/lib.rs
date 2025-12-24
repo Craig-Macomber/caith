@@ -151,7 +151,7 @@ mod tests {
 
         assert_eq!(
             roll_res.format(true, Verbosity::Short),
-            "([3, 5] + 6 = **14**) + ([4, 2] + 6 = **12**) = **26** : test"
+            "(\\[3, 5\\] + 6 = **14**) + (\\[4, 2\\] + 6 = **12**) = **26** : test"
         );
     }
 

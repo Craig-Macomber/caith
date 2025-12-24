@@ -335,7 +335,7 @@ mod tests {
         let result = spec.roll().unwrap();
         assert_eq!(
             result.format(true, Verbosity::Medium),
-            "1 + 2\\*(3 + [**1**&#x200B;🡵1]e1) = **11**"
+            "1 + 2\\*(3 + \\[**1**&#x200B;🡵1\\]e1) = **11**"
         );
 
         assert_eq!(result.total(), 11.0);
@@ -351,7 +351,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             result.format(true, Verbosity::Medium),
-            "[(-), ( ), (+)] = **0**"
+            "\\[(-), ( ), (+)\\] = **0**"
         );
     }
 
@@ -365,7 +365,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             result.format(true, Verbosity::Medium),
-            "[~~*(-)*~~, ( ), (+)]d1 = **1**"
+            "\\[~~*(-)*~~, ( ), (+)\\]d1 = **1**"
         );
     }
 
@@ -379,7 +379,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             result.format(true, Verbosity::Medium),
-            "[(-), ( )] + [3] = **2**"
+            "\\[(-), ( )\\] + \\[3\\] = **2**"
         );
     }
 }

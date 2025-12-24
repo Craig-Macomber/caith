@@ -245,7 +245,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             result.format_history(true, Verbosity::Medium),
-            "[1, **2**&#x200B;🡵3]e2"
+            "\\[1, **2**&#x200B;🡵3\\]e2"
         );
 
         assert_eq!(result.total(), 6.0);
@@ -261,7 +261,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             result.format_history(true, Verbosity::Medium),
-            "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, **20**&#x200B;🡵20]e20"
+            "\\[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, **20**&#x200B;🡵20\\]e20"
         );
 
         assert_eq!(result.total(), 4.0);
@@ -273,7 +273,7 @@ mod tests {
         let result = spec.roll().unwrap();
         assert_eq!(
             result.format_history(true, Verbosity::Medium),
-            "1 + 2\\*3 + [**1**&#x200B;🡵1]e1"
+            "1 + 2\\*3 + \\[**1**&#x200B;🡵1\\]e1"
         );
 
         assert_eq!(result.total(), 9.0);
