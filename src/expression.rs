@@ -335,7 +335,7 @@ mod tests {
         let result = spec.roll().unwrap();
         assert_eq!(
             result.format(true, Verbosity::Medium),
-            "1 + 2\\*(3 + [**1**🡵1]e1) = **11**"
+            "1 + 2\\*(3 + [**1**&#x200B;🡵1]e1) = **11**"
         );
 
         assert_eq!(result.total(), 11.0);

@@ -56,7 +56,14 @@ impl<TRoll: Roll> ModifiedRoll<TRoll> {
                 RollModifier::Explode(items) => {
                     format!(
                         "{}{}",
-                        format_join(self.chain(items.clone()).map(|x| format!("**{}**🡵", x)), ""),
+                        format_join(
+                            self.chain(items.clone())
+                                // For reasons unknown, some markdown parsers need a space after the ** here to parse correctly for fudge dice which format with a space in them.
+                                // To fix this without undesired visual impact include a zero width space to fix it.
+                                // This zero width space has to be escaped instead of included directly for it to have an effect.
+                                .map(|x| format!("**{}**&#x200B;🡵", x)),
+                            ""
+                        ),
                         items.last().unwrap()
                     )
                 }
@@ -750,7 +757,7 @@ mod tests {
         );
         assert_eq!(
             result.format_history(true, Verbosity::Medium),
-            "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**🡵5, **4**🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1"
+            "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**&#x200B;🡵5, **4**&#x200B;🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1"
         );
 
         assert_eq!(
@@ -759,7 +766,7 @@ mod tests {
         );
         assert_eq!(
             result.format_history(true, Verbosity::Verbose),
-            "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**🡵5, **4**🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1 🡲 [5, 4, 6]"
+            "[~~*1*~~, ~~*2*~~, 3, 4]K2 🡲 [**3**&#x200B;🡵5, **4**&#x200B;🡵6]e1 🡲 [~~*3*~~, 5, 4, 6]d1 🡲 [5, 4, 6]"
         );
     }
 }
