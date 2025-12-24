@@ -4,7 +4,7 @@ use pest::{iterators::Pair, pratt_parser::PrattParser};
 use pest_derive::Parser;
 
 #[derive(Parser)]
-#[grammar = "caith.pest"]
+#[grammar = "dicey.pest"]
 pub(crate) struct RollParser;
 
 pub(crate) fn climb<'i, P, F, G, T>(pairs: P, primary: F, infix: G) -> T

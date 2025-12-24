@@ -7,10 +7,10 @@ use std::{
 use pest::iterators::{Pair, Pairs};
 
 use crate::{
+    DiceRollSource, Result, RollError, Rollable,
     dice_expression::parse_dice,
     dice_kind::basic::BasicDice,
-    parser::{climb, Rule},
-    DiceRollSource, Result, RollError, Rollable,
+    parser::{Rule, climb},
 };
 
 /// A parsed dice expression.
@@ -287,7 +287,7 @@ pub(crate) fn parse_expression(
                         None => {
                             return Err(RollError::ParamError(format!(
                                 "Reference to undefined variable \"{identifier}\""
-                            )))
+                            )));
                         }
                     }
                 }

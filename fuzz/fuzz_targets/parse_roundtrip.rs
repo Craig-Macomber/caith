@@ -1,7 +1,7 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 
-use ::caith::Command;
+use ::dicey::Command;
 
 fuzz_target!(|data: &str| {
     if let Ok(roller) = Command::parse(data) {

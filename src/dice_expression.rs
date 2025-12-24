@@ -9,13 +9,13 @@ use std::{
 use pest::iterators::{Pair, Pairs};
 
 use crate::{
-    dice_kind::{basic::BasicDice, fudge::Fudge, DiceKind, Roll},
+    DiceRollSource, Result, RollError, Rollable,
+    dice_kind::{DiceKind, Roll, basic::BasicDice, fudge::Fudge},
     expression::{
         EvaluatedExpression, Expression, ExpressionResult, ExpressionRollable, Verbosity,
     },
     keep_or_drop::KeepOrDrop,
     parser::Rule,
-    DiceRollSource, Result, RollError, Rollable,
 };
 
 /// A batch of rolls of the same kind of dice.
@@ -229,9 +229,9 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
             PerRollModifier::RerollUnlimited(n) => {
                 if *n >= max {
                     // TODO: catch this during parse
-                    return Err(RollError::ParamError(
-                        format!("Cannot infinitely reroll dice of {n} or lower since the maximum roll is {max}: this would go on forever")
-                    ));
+                    return Err(RollError::ParamError(format!(
+                        "Cannot infinitely reroll dice of {n} or lower since the maximum roll is {max}: this would go on forever"
+                    )));
                 }
                 let new_rolls = roll_until(dice, roll, |next| next > *n, rng)?;
                 if !new_rolls.is_empty() {
@@ -250,9 +250,9 @@ impl<TRoll: Roll> PerRollModifier<TRoll> {
             PerRollModifier::ExplodeUnlimited(n) => {
                 if *n <= dice.min() {
                     // TODO: catch this during parse
-                    return Err(RollError::ParamError(
-                        format!("Cannot infinitely explode dice of {n} or higher since the minimum roll is {min}: this would go on forever")
-                    ));
+                    return Err(RollError::ParamError(format!(
+                        "Cannot infinitely explode dice of {n} or higher since the minimum roll is {min}: this would go on forever"
+                    )));
                 }
                 let new_rolls = roll_until(dice, roll, |next| next < *n, rng)?;
                 if !new_rolls.is_empty() {

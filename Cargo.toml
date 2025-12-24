@@ -1,12 +1,12 @@
 [package]
-name = "caith"
+name = "dicey"
 version = "4.2.4"
-authors = ["Geobert Quach <geobert@protonmail.com>"]
-edition = "2021"
+authors = ["Craig Macomber <CraigM@CraigM.info>"]
+edition = "2024"
 description = "A dice roller library supporting many features"
 keywords = ["dice", "roll", "RPG", "roll", "random"]
 categories = ["game-development", "games"]
-repository = "https://github.com/Geobert/caith"
+repository = "https://github.com/Craig-Macomber/caith"
 license = "MIT"
 readme = "README.md"
 

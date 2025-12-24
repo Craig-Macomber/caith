@@ -1,11 +1,11 @@
 use super::{EvaluatedExpression, Expression};
 use crate::{
+    DiceRollSource, Result, Rollable, Verbosity,
     dice_expression::limit_dice,
     expression::{format_bold, parse_expression},
     parser::{RollParser, Rule},
-    DiceRollSource, Result, Rollable, Verbosity,
 };
-use pest::{iterators::Pair, Parser};
+use pest::{Parser, iterators::Pair};
 use std::{collections::HashMap, fmt::Display};
 
 /// Parse a single (non-repeated) dice expression.
@@ -233,7 +233,7 @@ impl Expression {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{tests::IteratorDiceRollSource, RollError};
+    use crate::{RollError, tests::IteratorDiceRollSource};
 
     #[test]
     fn dice_command_sum() {

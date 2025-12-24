@@ -5,9 +5,9 @@ use std::{
 };
 
 use crate::{
+    DiceRollSource,
     dice_kind::ParseDiceError,
     dice_kind::{DiceKind, Roll},
-    DiceRollSource,
 };
 
 /// A [Fudge_dice](https://en.wikipedia.org/wiki/Fudge_%28role-playing_game_system%29#Fudge_dice).

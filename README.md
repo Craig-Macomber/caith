@@ -1,27 +1,10 @@
-[![Docs](https://docs.rs/caith/badge.svg)](https://docs.rs/caith)
-[![Crates.io](https://img.shields.io/crates/d/caith.svg)](https://crates.io/crates/caith)
-[![Crates.io](https://img.shields.io/crates/v/caith.svg)](https://crates.io/crates/caith)
+# Dicey
 
-# Caith
+A dice roller library written in Rust.
 
-A dice roller library written in Rust (and also a card drawer).
+This crate aims at providing everything needed for playing tabletop RPGs.
 
-This crate aims at providing everything needed for playing tabletop RPG.
-
-The different features are inspired by [DiceMaiden](https://github.com/Humblemonk/DiceMaiden)
-and [Sidekick](https://github.com/ArtemGr/Sidekick).
-
-[Dìsle](https://github.com/Geobert/disle/) is a Discord bot build upon `caith`.
-
-# Usage
-
-```rust
-use caith::{Roller, RollResult, RollResultType};
-
-// ...
-let result = Roller::new("1d6 : initiative").unwrap().roll().unwrap();
-printf("{}", result);
-```
+This is a fork of [caith](https://github.com/Geobert/caith) use by [https://inland.martials.org/](https://inland.martials.org/).
 
 # Syntax
 
@@ -64,27 +47,9 @@ Reason:
 : : Any text after `:` will be a comment
 ```
 
-# Helpers
-
-Some helpers are provided to interpret the roll result according to specific RPG rules.
-See the helpers documentation for more details.
-
-You'll need to add the feature flag of the helpers that you need.
-
-At the moment, the supported feature flags are:
-- `ova`: helper for "OVA: The Anime Role-Playing Game result"
-- `cde`: helper for "Hong Kong, Les Chroniques de l'étrange"
-
-None is activated by default
-
-# Cards
-
-`caith` can create a standard deck of 52 cards plus optional Jokers if the feature `cards`
-is activated. See [`cards::Deck`].
-
 # Limitations
 
-To avoid OOM issue, there is a limit of 5000 dices of 5000 sides maximum.
+To avoid OOM issues, there is a limit of 5000 dices of 5000 sides maximum.
 
 # Examples
 
@@ -140,3 +105,6 @@ These commands can be combined. For example:
 
 `10d6 e6 K8 + 4` : Roll ten six-sided dice, explode on sixes and keep eight of the highest rolls
 and add four.
+
+`6d6 e5 K3 r2 d2 e6 + 5df k4 e( )` : Complex expressions like this can have their results rendered to explanatory markdown which details all the steps:
+> [**5**&#x200B;🡵2, **5**&#x200B;🡵2, 1, **6**&#x200B;🡵1, **6**&#x200B;🡵1, 2]e5 🡲 [5, ~~*2*~~, ~~*5*~~, ~~*2*~~, ~~*1*~~, 6, ~~*1*~~, 6, ~~*1*~~, ~~*2*~~]K3 🡲 [5, 6, 6]r2 🡲 [~~*5*~~, 6, ~~*6*~~]d2 🡲 [**6**🡵3]e6 + [(-), ~~*(+)*~~, ( ), ( ), ( )]k4 🡲 [(-), **( )**&#x200B;🡵(-), **( )**&#x200B;🡵(-), **( )**&#x200B;🡵(+)]e( ) = **7**
