@@ -161,10 +161,10 @@ impl Command {
             _ => unreachable!(),
         };
 
-        if let Some(reason) = pairs.next() {
-            if reason.as_rule() == Rule::reason {
-                command.reason = Some(reason.as_str()[1..].trim().to_owned());
-            }
+        if let Some(reason) = pairs.next()
+            && reason.as_rule() == Rule::reason
+        {
+            command.reason = Some(reason.as_str()[1..].trim().to_owned());
         }
         Ok(command)
     }

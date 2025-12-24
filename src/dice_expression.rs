@@ -505,20 +505,20 @@ impl<TRoll: Roll> Aggregator<TRoll> {
     pub fn apply_single(&self, roll: TRoll) -> i64 {
         match self {
             Aggregator::TargetFailureDouble(t, f, d) => {
-                if let Some(d) = *d {
-                    if roll >= d {
-                        return 2;
-                    }
+                if let Some(d) = *d
+                    && roll >= d
+                {
+                    return 2;
                 }
-                if let Some(t) = *t {
-                    if roll >= t {
-                        return 1;
-                    }
+                if let Some(t) = *t
+                    && roll >= t
+                {
+                    return 1;
                 }
-                if let Some(f) = *f {
-                    if roll <= f {
-                        return -1;
-                    }
+                if let Some(f) = *f
+                    && roll <= f
+                {
+                    return -1;
                 }
                 0
             }
